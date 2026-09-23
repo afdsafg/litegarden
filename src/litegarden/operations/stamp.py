@@ -77,6 +77,20 @@ def _ground_y(snapshot: SceneSnapshot, ground_height, x: int, z: int) -> int:
     return -1
 
 
+def asset_base_y(ground_height, asset: Asset, origin_xz: Vec2) -> int:
+    """The y of the asset's dy=0 layer: one above the highest footprint ground."""
+    fx, fz = asset.footprint
+    ox, oz = origin_xz
+    heights = []
+    for dx in range(fx):
+        for dz in range(fz):
+            g = _ground_y(None, ground_height, ox + dx, oz + dz)
+            if g < 0:
+                raise AssetError(f"no verified ground under footprint at ({ox+dx},{oz+dz})")
+            heights.append(g)
+    return max(heights) + 1
+
+
 def place_asset(
     snapshot: SceneSnapshot,
     ground_height,
@@ -96,15 +110,13 @@ def place_asset(
 
     fx, fz = asset.footprint
     ox, oz = origin_xz
-    # base y = max ground height across the footprint
-    heights = []
-    for dx in range(fx):
-        for dz in range(fz):
-            g = _ground_y(snapshot, ground_height, ox + dx, oz + dz)
-            if g < 0:
-                raise AssetError(f"{op_id}: no verified ground under footprint at ({ox+dx},{oz+dz})")
-            heights.append(g)
-    base_y = max(heights) + 1
+    try:
+        base_y = asset_base_y(ground_height, asset, origin_xz)
+    except AssetError as e:
+        raise AssetError(f"{op_id}: {e}") from None
+
+    changes: List[BlockChange] = []
+    rid = snapshot.region_id
 
     changes: List[BlockChange] = []
     rid = snapshot.region_id

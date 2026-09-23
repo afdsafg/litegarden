@@ -23,6 +23,25 @@ import nbtlib
 from litemapy import BlockState, Region, Schematic
 from nbtlib.tag import Compound, Int
 
+
+def block_state_from_string(state: str):
+    """Build a litemapy ``BlockState`` from a normalised state string.
+
+    ``"minecraft:oak_stairs[facing=north,half=bottom]"`` -> the block with those
+    properties. A state without a ``[...]`` suffix is a plain block id.
+    """
+    if "[" not in state:
+        return BlockState(state)
+    block_id, _, rest = state.partition("[")
+    rest = rest.rstrip("]")
+    props = {}
+    for part in rest.split(","):
+        if not part.strip():
+            continue
+        key, _, value = part.partition("=")
+        props[key.strip()] = value.strip()
+    return BlockState(block_id, **props)
+
 from .scene import AIR, CoordTransform, PatchSet, RegionInfo, SceneSnapshot, Vec3
 
 # Metadata fields we are allowed to refresh on save (whitelist).
@@ -123,7 +142,7 @@ def apply_patchset(scene: LoadedScene, patch: PatchSet) -> None:
             )
     for change in patch:
         p_region = snap.transform.local_to_region(change.pos_local)
-        region[p_region] = BlockState(change.after)
+        region[p_region] = block_state_from_string(change.after)
 
 
 def save_scene(scene: LoadedScene, out_path: str) -> None:
@@ -227,3 +246,147 @@ def compare_to_expected(path: str, scene: LoadedScene, patch: PatchSet) -> Dict[
                 f"cell {p_local}: expected '{expected}', reloaded '{got}'"
             )
     return {"checked": checked, "changed": changed}
+
+
+# --------------------------------------------------------------------------
+# P0: NBT preservation and block-entity host dependencies (spec 7)
+# --------------------------------------------------------------------------
+
+
+class BlockEntityHostChanged(AssertionError):
+    """A retained tile entity's host block changed, so its data is orphaned."""
+
+    code = "BLOCK_ENTITY_HOST_CHANGED"
+
+    def __init__(self, pos_local: Vec3, before: str, after: str, entity_id: str) -> None:
+        super().__init__(
+            f"{pos_local}: tile entity '{entity_id}' is retained but its host block "
+            f"changed from '{before}' to '{after}'"
+        )
+        self.pos_local = tuple(pos_local)
+        self.before = before
+        self.after = after
+        self.entity_id = entity_id
+
+    def to_dict(self) -> dict:
+        return {
+            "code": self.code,
+            "message": str(self),
+            "pos_local": list(self.pos_local),
+            "entity_id": self.entity_id,
+            "expected": self.before,
+            "actual": self.after,
+            "rule_id": "nbt/block_entity_host",
+        }
+
+
+def tile_entity_records(scene: LoadedScene) -> list:
+    """Tile entities of the loaded region, each with its host block.
+
+    In the litematic layout TileEntities[*].x/y/z are map-anchored (schematic)
+    coordinates, not litemapy region indices; they are converted with the same
+    transform the rest of the project uses. A coordinate outside the region is
+    reported rather than silently dropped, and a malformed entry stops the run
+    instead of being guessed at.
+    """
+    region_tag = _region_nbt(scene.raw_nbt, scene.snapshot.region_id)
+    tag = region_tag.get("TileEntities")
+    if tag is None:
+        return []
+    out = []
+    for i, entry in enumerate(tag):
+        if not isinstance(entry, Compound):
+            raise UnsupportedFormatError(
+                f"TileEntities[{i}] is not a Compound; refusing to guess"
+            )
+        missing = [k for k in ("x", "y", "z") if k not in entry]
+        if missing:
+            raise UnsupportedFormatError(
+                f"TileEntities[{i}] is missing {missing}; refusing to guess a position"
+            )
+        p_schem = (int(entry["x"]), int(entry["y"]), int(entry["z"]))
+        p_local = scene.snapshot.transform.schematic_to_local(p_schem)
+        inside = scene.snapshot.contains_local(p_local)
+        out.append({
+            "index": i,
+            "id": str(entry.get("id", "")),
+            "pos_schematic": list(p_schem),
+            "pos_local": list(p_local),
+            "inside_region": inside,
+            "host": scene.snapshot.block_at_local(p_local) if inside else None,
+        })
+    return out
+
+
+def entity_host_positions(scene: LoadedScene) -> list:
+    """Local positions whose host block must not change.
+
+    Tile entities are treated conservatively: this round never migrates an
+    entity, so the voxel hosting it is read-only. A tile entity outside the
+    region is reported instead of being quietly ignored.
+    """
+    records = tile_entity_records(scene)
+    outside = [r for r in records if not r["inside_region"]]
+    if outside:
+        raise UnsupportedFormatError(
+            f"{len(outside)} tile entit(ies) fall outside the region bounds: "
+            f"{[r['pos_schematic'] for r in outside][:4]}"
+        )
+    return sorted({tuple(r["pos_local"]) for r in records})  # type: ignore[misc]
+
+
+def check_block_entity_hosts(original: LoadedScene, reloaded: LoadedScene) -> None:
+    """Refuse a save that retained a tile entity but changed its host block."""
+    for rec in tile_entity_records(original):
+        if not rec["inside_region"]:
+            continue
+        p_local = tuple(rec["pos_local"])
+        if not reloaded.snapshot.contains_local(p_local):
+            raise UnsupportedFormatError(
+                f"reloaded scene does not contain tile entity position {p_local}"
+            )
+        before = original.snapshot.block_at_local(p_local)
+        after = reloaded.snapshot.block_at_local(p_local)
+        if before != after:
+            raise BlockEntityHostChanged(p_local, before, after, rec["id"])
+
+
+def compare_nbt_preservation(
+    original: LoadedScene,
+    reloaded: LoadedScene,
+    allowed_paths=None,
+) -> list:
+    """Type-sensitive NBT comparison between the source and a re-read export.
+
+    Only the edited region's palette/BlockStates and the whitelisted metadata
+    fields may differ. Returns the raw difference list; callers that need a
+    hard failure use :func:`ensure_export_preserved`.
+    """
+    from .nbt_compare import allowed_save_paths, compare_nbt
+
+    region_id = original.snapshot.region_id
+    paths = allowed_paths if allowed_paths is not None else allowed_save_paths(region_id)
+    return compare_nbt(original.raw_nbt, reloaded.raw_nbt, paths)
+
+
+def ensure_export_preserved(original: LoadedScene, reloaded: LoadedScene) -> None:
+    """Verify a re-read export preserves NBT types/values and host blocks.
+
+    Raises NbtPreservationError for a non-whitelisted NBT change and
+    BlockEntityHostChanged when retained data would be orphaned. A screenshot
+    can never prove this; it is a data-layer check only.
+    """
+    from .nbt_compare import NbtPreservationError, allowed_save_paths, ensure_nbt_preserved
+
+    paths = allowed_save_paths(original.snapshot.region_id)
+    try:
+        ensure_nbt_preserved(original.raw_nbt, reloaded.raw_nbt, paths)
+    except NbtPreservationError as e:
+        first = e.differences[0] if e.differences else None
+        raise NbtPreservationError(
+            f"{len(e.differences)} non-whitelisted NBT difference(s) between the source "
+            f"and the re-read export"
+            + (f"; first: {first.code} at {first.tag_path}" if first else ""),
+            e.differences,
+        ) from None
+    check_block_entity_hosts(original, reloaded)

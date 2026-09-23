@@ -1,7 +1,10 @@
 {
-  "version": "0.1",
+  "version": "0.2",
   "minecraft_data_version": 3953,
-  "note": "Only blocks verified for the target version may appear here. New blocks are added only after in-game validation.",
+  "reference_note": "minecraft_data_version is the version the block list was originally written against; it is not the version gate. The gate is editable_data_versions below.",
+  "editable_data_versions": [4671],
+  "editable_data_versions_note": "Project-declared editable input versions. The imported terrain reports MinecraftDataVersion 4671. In-game validation of this block set under that version is still outstanding (stage P6), so this declaration is a project decision that is reported, never presented as verified.",
+  "in_game_validated": false,
   "allowed_new_blocks": [
     "minecraft:stone_bricks",
     "minecraft:cobblestone",
@@ -11,6 +14,8 @@
     "minecraft:oak_log",
     "minecraft:oak_leaves",
     "minecraft:lantern",
-    "minecraft:oak_fence"
-  ]
+    "minecraft:oak_fence",
+    "minecraft:stone_brick_slab"
+  ],
+  "note": "Only blocks verified for the target version may appear here. New blocks are added only after in-game validation, and anything still pending that validation is listed in pending_in_game_validation."
 }

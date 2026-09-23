@@ -11,24 +11,17 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+from .blocks import COVER_BLOCKS, GROUND_BLOCKS, OBSTACLE_BLOCKS, WATER_BLOCKS
 from .scene import AIR, SceneSnapshot, Vec3
 
 Vec2 = Tuple[int, int]
 
-# Verified natural ground blocks (whitelist; extend only after validation).
-_GROUND_BLOCKS = frozenset({
-    "minecraft:grass_block", "minecraft:dirt", "minecraft:stone",
-    "minecraft:sand", "minecraft:gravel", "minecraft:podzol",
-    "minecraft:mycelium", "minecraft:coarse_dirt", "minecraft:rooted_dirt",
-    "minecraft:clay", "minecraft:moss_block",
-})
-_WATER_BLOCKS = frozenset({"minecraft:water"})
-# Blocks that are obstacles to construction but not ground.
-_OBSTACLE_BLOCKS = frozenset({
-    "minecraft:oak_log", "minecraft:birch_log", "minecraft:spruce_log",
-    "minecraft:jungle_log", "minecraft:acacia_log", "minecraft:dark_oak_log",
-    "minecraft:mangrove_log", "minecraft:cherry_log", "minecraft:pale_oak_log",
-})
+# Kept as private aliases so existing callers and tests keep working; the
+# authoritative tables now live in litegarden.blocks.
+_GROUND_BLOCKS = GROUND_BLOCKS
+_WATER_BLOCKS = WATER_BLOCKS
+_OBSTACLE_BLOCKS = OBSTACLE_BLOCKS
+_COVER_BLOCKS = COVER_BLOCKS
 
 
 @dataclass
@@ -43,13 +36,26 @@ class TerrainAnalysis:
     obstacle_mask: np.ndarray  # (x,z) bool
     slope_map: np.ndarray  # (x,z) float: max |dy| to 4-neighbours
     headroom: np.ndarray  # (x,z) int: clear air above ground
+    # Cover-tolerant buildable surface (P1). ground_height requires the voxel
+    # above the ground to be air, so a column carrying non-colliding cover
+    # (leaf litter, short grass) reports "no verified ground" even though it is
+    # perfectly buildable. build_height answers the paving question instead:
+    # the top ground block whose next `min_headroom` voxels are air or known
+    # cover. cover_above lists the cover voxels to request clearance for.
+    build_height: Optional[np.ndarray] = None  # (x,z) int
+    cover_above: Dict[Tuple[int, int], Tuple[int, ...]] = field(default_factory=dict)
     site_candidates: List[dict] = field(default_factory=list)
     anchors: Dict[str, Vec2] = field(default_factory=dict)
     zones: Dict[str, dict] = field(default_factory=dict)
 
+def analyze(snapshot: SceneSnapshot, min_headroom: int = 2) -> TerrainAnalysis:
+    """Compute the terrain analysis grids from the baseline snapshot.
 
-def analyze(snapshot: SceneSnapshot) -> TerrainAnalysis:
-    """Compute the terrain analysis grids from the baseline snapshot."""
+    ``min_headroom`` is the walk clearance used by the cover-tolerant
+    ``build_height`` surface; it does not change ``ground_height`` /
+    ``headroom`` semantics, so site and anchor selection stay identical to the
+    previously verified version.
+    """
     t = snapshot.transform
     sx, sy, sz = t.local_size
     surface = np.full((sx, sz), -1, dtype=np.int32)
@@ -57,6 +63,8 @@ def analyze(snapshot: SceneSnapshot) -> TerrainAnalysis:
     water = np.zeros((sx, sz), dtype=bool)
     obstacle = np.zeros((sx, sz), dtype=bool)
     headroom = np.zeros((sx, sz), dtype=np.int32)
+    build = np.full((sx, sz), -1, dtype=np.int32)
+    cover_above: Dict[Vec2, Tuple[int, ...]] = {}
 
     for x in range(sx):
         for z in range(sz):
@@ -84,6 +92,31 @@ def analyze(snapshot: SceneSnapshot) -> TerrainAnalysis:
                         break
                 headroom[x, z] = hr
 
+            # Cover-tolerant buildable surface (see TerrainAnalysis docstring).
+            # Scan down from the top: air and known non-colliding cover may be
+            # passed, the first remaining block decides. A column qualifies
+            # only when that block is verified ground and the next
+            # `min_headroom` voxels above it are air or cover, so a canopy
+            # high above the road does not disqualify it.
+            b = -1
+            cov: List[int] = []
+            for y in range(sy - 1, -1, -1):
+                c = col[y]
+                if c == AIR:
+                    continue
+                if c in _COVER_BLOCKS:
+                    cov.append(y)
+                    continue
+                if c in _GROUND_BLOCKS and y + min_headroom < sy and all(
+                    col[y + k] == AIR or col[y + k] in _COVER_BLOCKS
+                    for k in range(1, min_headroom + 1)
+                ):
+                    b = y
+                break
+            build[x, z] = b
+            if b >= 0 and cov:
+                cover_above[(x, z)] = tuple(sorted(c for c in cov if c > b))
+
     slope = np.zeros((sx, sz), dtype=np.float32)
     for x in range(sx):
         for z in range(sz):
@@ -103,6 +136,7 @@ def analyze(snapshot: SceneSnapshot) -> TerrainAnalysis:
         surface_height=surface, ground_height=ground,
         water_mask=water, obstacle_mask=obstacle,
         slope_map=slope, headroom=headroom,
+        build_height=build, cover_above=cover_above,
     )
 
 
