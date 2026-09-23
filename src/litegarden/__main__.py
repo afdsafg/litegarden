@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .compiler import CompileError, compile_plan
 from .io import (
     LoadedScene,
     MultiRegionError,
@@ -26,7 +27,27 @@ from .io import (
     load_scene,
     save_scene,
 )
-from .scene import PatchSet
+from .report import write_report
+from .schema import parse_plan
+from .terrain import analyze, build_planning_index
+from .validate import validate_patch
+
+
+def _assets_dir(args: argparse.Namespace) -> Path:
+    return Path(getattr(args, "assets", "assets"))
+
+
+def _analysis(scene, config_path=None):
+    a = analyze(scene.snapshot)
+    build_planning_index(a)
+    # inject user-declared named anchors from config.json (read-only input)
+    if config_path:
+        import json, os
+        if os.path.exists(config_path):
+            cfg = json.loads(open(config_path, encoding="utf-8").read())
+            for name, pos in cfg.get("anchors", {}).items():
+                a.anchors[name] = tuple(pos)
+    return a
 
 
 def _cmd_inspect(args: argparse.Namespace) -> int:
@@ -35,6 +56,7 @@ def _cmd_inspect(args: argparse.Namespace) -> int:
     out.mkdir(parents=True, exist_ok=True)
     snap = scene.snapshot
     info = snap.transform.region
+    a = _analysis(scene)
     summary = {
         "input": str(args.input),
         "data_version": scene.data_version,
@@ -45,41 +67,65 @@ def _cmd_inspect(args: argparse.Namespace) -> int:
         "min_schem": list(info.min_schem),
         "max_schem": list(info.max_schem),
         "local_size": list(snap.transform.local_size),
+        "site_candidates": a.site_candidates,
+        "anchors": {k: list(v) for k, v in a.anchors.items()},
+        "zones": a.zones,
     }
     (out / "inspect.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    print(json.dumps(summary, indent=2))
+    print(json.dumps({k: summary[k] for k in ("region_id", "local_size", "data_version")}, indent=2))
+    print(f"sites={len(a.site_candidates)} anchors={len(a.anchors)} zones={len(a.zones)}")
     return 0
 
 
 def _cmd_compile(args: argparse.Namespace) -> int:
-    # Full plan compilation arrives with the operations layer; for now we load
-    # the scene, validate the plan file parses, and report a no-op patch.
     scene = load_scene(args.input)
-    plan_path = Path(args.plan)
-    plan = json.loads(plan_path.read_text(encoding="utf-8"))
-    patch = PatchSet()  # TODO: compile plan -> PatchSet via operations
+    plan = parse_plan(Path(args.plan).read_text(encoding="utf-8"))
+    analysis = _analysis(scene, getattr(args, "config", None))
+    try:
+        result = compile_plan(scene.snapshot, plan, analysis, _assets_dir(args))
+    except CompileError as e:
+        print(json.dumps({"error": str(e), "op_id": e.op_id}, indent=2), file=sys.stderr)
+        return 1
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    result = {
+    rep = validate_patch(scene.snapshot, result.patch)
+    payload = {
         "input": str(args.input),
-        "plan": str(plan_path),
+        "plan": str(args.plan),
         "dry_run": bool(args.dry_run),
-        "ops": len(plan.get("operations", [])),
-        "changes": len(patch),
+        "ops": len(plan.operations),
+        "changes": len(result.patch),
+        "valid": rep.ok,
+        "errors": rep.errors,
     }
-    (out / "compile.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
-    print(json.dumps(result, indent=2))
-    return 0
+    (out / "compile.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    print(json.dumps(payload, indent=2))
+    return 0 if rep.ok else 1
 
 
 def _cmd_export(args: argparse.Namespace) -> int:
     scene = load_scene(args.input)
     plan_path = Path(args.plan)
-    plan = json.loads(plan_path.read_text(encoding="utf-8"))
-    patch = PatchSet()  # TODO: compile plan -> PatchSet via operations
-
+    plan = parse_plan(plan_path.read_text(encoding="utf-8"))
+    analysis = _analysis(scene, getattr(args, "config", None))
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+
+    try:
+        result = compile_plan(scene.snapshot, plan, analysis, _assets_dir(args))
+    except CompileError as e:
+        err = {"error": str(e), "op_id": e.op_id}
+        (out / "error.json").write_text(json.dumps(err, indent=2), encoding="utf-8")
+        print(json.dumps(err, indent=2), file=sys.stderr)
+        return 1
+    patch = result.patch
+
+    rep = validate_patch(scene.snapshot, patch)
+    if not rep.ok:
+        err = {"error": "validation failed", "errors": rep.errors}
+        (out / "error.json").write_text(json.dumps(err, indent=2), encoding="utf-8")
+        print(json.dumps(err, indent=2), file=sys.stderr)
+        return 1
 
     apply_patchset(scene, patch)
     full_path = out / "full.litematic"
@@ -102,8 +148,8 @@ def _cmd_export(args: argparse.Namespace) -> int:
     ]
     (out / "changes.json").write_text(json.dumps(changes_json, indent=2), encoding="utf-8")
     (out / "plan.json").write_text(plan_path.read_text(encoding="utf-8"), encoding="utf-8")
-    report = {"verified": stats, "changes": len(patch)}
-    (out / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    write_report(patch, out / "report.json", out / "report.md")
+    report = {"verified": stats, "changes": len(patch), "warnings": result.warnings}
     print(json.dumps(report, indent=2))
     return 0
 
@@ -117,18 +163,24 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("input", help="input terrain.litematic")
         sp.add_argument("--out", required=True, help="output directory")
 
+    def add_assets(sp: argparse.ArgumentParser) -> None:
+        sp.add_argument("--assets", default="assets", help="assets directory")
+        sp.add_argument("--config", default=None, help="config.json with anchors/zones")
+
     sp = sub.add_parser("inspect", help="load and summarize a litematic")
     add_io(sp)
     sp.set_defaults(func=_cmd_inspect)
 
     sp = sub.add_parser("compile", help="compile a plan into a PatchSet")
     add_io(sp)
+    add_assets(sp)
     sp.add_argument("--plan", required=True, help="plan.json")
     sp.add_argument("--dry-run", action="store_true", help="validate only, no export")
     sp.set_defaults(func=_cmd_compile)
 
     sp = sub.add_parser("export", help="compile, validate and write outputs")
     add_io(sp)
+    add_assets(sp)
     sp.add_argument("--plan", required=True, help="plan.json")
     sp.set_defaults(func=_cmd_export)
 

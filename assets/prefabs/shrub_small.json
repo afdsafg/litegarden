@@ -1,0 +1,13 @@
+{
+ "blocks": {
+  "0,0,0": "minecraft:oak_leaves"
+ },
+ "required_empty": [],
+ "support": [
+  [
+   0,
+   0
+  ]
+ ],
+ "max_foundation_depth": 1
+}

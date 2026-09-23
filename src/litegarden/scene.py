@@ -155,10 +155,10 @@ class SceneSnapshot:
     def block_at_local(self, p_local: Vec3) -> str:
         """Baseline block id at a local coordinate."""
         p_region = self.transform.local_to_region(p_local)
-        return self._region.getblock(*p_region).id
+        return self._region[p_region].id
 
     def block_at_region(self, p_region: Vec3) -> str:
-        return self._region.getblock(*p_region).id
+        return self._region[p_region].id
 
     def iter_local(self) -> Iterator[Vec3]:
         return self.transform.iter_local()

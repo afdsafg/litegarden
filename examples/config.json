@@ -1,6 +1,8 @@
 {
   "protected_zones": [],
   "editable_zone": null,
-  "entry": [0, 0, 0],
-  "budget": {"max_blocks": 20000}
+  "budget": {"max_blocks": 20000},
+  "anchors": {
+    "entry_west": [8, 24]
+  }
 }

@@ -1,0 +1,15 @@
+{
+ "blocks": {
+  "0,0,0": "minecraft:oak_fence",
+  "0,1,0": "minecraft:oak_fence",
+  "0,2,0": "minecraft:lantern"
+ },
+ "required_empty": [],
+ "support": [
+  [
+   0,
+   0
+  ]
+ ],
+ "max_foundation_depth": 2
+}
