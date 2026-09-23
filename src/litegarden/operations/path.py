@@ -97,22 +97,38 @@ def find_path(
     return path
 
 
+
+def _palette_parts(palette) -> tuple:
+    """Accept either a legacy flat list or a structured {surface, edge, support}.
+
+    Returns (surface_list, edge_block, support_block).
+    """
+    if isinstance(palette, dict):
+        surface = list(palette.get("surface") or [])
+        edge = palette.get("edge") or (surface[0] if surface else None)
+        support = palette.get("support") or (surface[0] if surface else None)
+        return surface, edge, support
+    # legacy flat list
+    return list(palette), palette[0], palette[0]
+
+
 def pave_path(
     snapshot: SceneSnapshot,
     ground_height,
     path: List[Vec2],
     width: int,
-    palette: List[str],
+    palette,
     op_id: str,
 ) -> List[BlockChange]:
     """Pave a solved path at the given width using a palette.
 
     The full road width is levelled to the centre cell's ground height and
-    paved; the cell directly beneath each road block is filled with the first
-    palette block when it is air (light support). Raises PathError if any road
-    cell is out of bounds.
+    paved; edge cells use the palette's edge block for a defined border, and
+    the cell directly beneath each road block is filled with the support block
+    when it is air. Raises PathError if any road cell is out of bounds.
     """
-    if not palette:
+    surface_list, edge_block, support_block = _palette_parts(palette)
+    if not surface_list:
         raise PathError(f"{op_id}: empty palette")
     half = width // 2
     changes: List[BlockChange] = []
@@ -127,14 +143,28 @@ def pave_path(
 
     for i, (cx, cz) in enumerate(path):
         gy = int(ground_height[cx, cz])
-        surface = palette[i % len(palette)]
+        surface = surface_list[i % len(surface_list)]
+        # road direction at this cell (for edge orientation)
+        if i + 1 < len(path):
+            dirx, dirz = path[i + 1][0] - cx, path[i + 1][1] - cz
+        elif i > 0:
+            dirx, dirz = cx - path[i - 1][0], cz - path[i - 1][1]
+        else:
+            dirx, dirz = 1, 0
         for dx in range(-half, half + 1):
             for dz in range(-half, half + 1):
                 x, z = cx + dx, cz + dz
                 if not (0 <= x < ground_height.shape[0] and 0 <= z < ground_height.shape[1]):
                     raise PathError(f"{op_id}: road cell ({x},{z}) out of bounds")
-                emit((x, gy, z), surface)
+                # edge = cells offset perpendicular to the road direction
+                if dirx != 0:  # road runs along x -> edges are at dz extremes
+                    is_edge = abs(dz) == half
+                elif dirz != 0:  # road runs along z -> edges are at dx extremes
+                    is_edge = abs(dx) == half
+                else:
+                    is_edge = abs(dx) == half or abs(dz) == half
+                emit((x, gy, z), edge_block if (is_edge and width > 1) else surface)
                 # light support: fill the cell below if it is air
                 if gy - 1 >= 0 and snapshot.block_at_local((x, gy - 1, z)) == AIR:
-                    emit((x, gy - 1, z), palette[0])
+                    emit((x, gy - 1, z), support_block)
     return changes

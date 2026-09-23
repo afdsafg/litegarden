@@ -1,7 +1,15 @@
 {
   "version": "0.1",
   "palettes": {
-    "stone_path": ["minecraft:stone_bricks", "minecraft:cobblestone", "minecraft:gravel"],
-    "wood_path": ["minecraft:oak_planks", "minecraft:spruce_planks"]
+    "stone_path": {
+      "surface": ["minecraft:stone_bricks", "minecraft:stone_bricks", "minecraft:cobblestone", "minecraft:gravel"],
+      "edge": "minecraft:cobblestone",
+      "support": "minecraft:cobblestone"
+    },
+    "wood_path": {
+      "surface": ["minecraft:oak_planks", "minecraft:spruce_planks"],
+      "edge": "minecraft:oak_log",
+      "support": "minecraft:oak_log"
+    }
   }
 }

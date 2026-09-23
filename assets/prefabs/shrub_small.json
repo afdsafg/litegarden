@@ -1,6 +1,8 @@
 {
  "blocks": {
-  "0,0,0": "minecraft:oak_leaves"
+  "0,0,0": "minecraft:oak_log",
+  "0,1,0": "minecraft:oak_leaves",
+  "0,2,0": "minecraft:oak_leaves"
  },
  "required_empty": [],
  "support": [
