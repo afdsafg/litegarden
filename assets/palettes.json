@@ -1,0 +1,7 @@
+{
+  "version": "0.1",
+  "palettes": {
+    "stone_path": ["minecraft:stone_bricks", "minecraft:cobblestone", "minecraft:gravel"],
+    "wood_path": ["minecraft:oak_planks", "minecraft:spruce_planks"]
+  }
+}

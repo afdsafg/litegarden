@@ -1,0 +1,16 @@
+{
+  "version": "0.1",
+  "minecraft_data_version": 3953,
+  "note": "Only blocks verified for the target version may appear here. New blocks are added only after in-game validation.",
+  "allowed_new_blocks": [
+    "minecraft:stone_bricks",
+    "minecraft:cobblestone",
+    "minecraft:gravel",
+    "minecraft:oak_planks",
+    "minecraft:spruce_planks",
+    "minecraft:oak_log",
+    "minecraft:oak_leaves",
+    "minecraft:lantern",
+    "minecraft:oak_fence"
+  ]
+}

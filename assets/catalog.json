@@ -1,0 +1,23 @@
+{
+  "version": "0.1",
+  "assets": {
+    "pavilion_small": {
+      "footprint": [5, 5],
+      "height": 4,
+      "entries": [{"id": "entry", "offset": [2, 0]}],
+      "variants": ["north", "south", "east", "west"]
+    },
+    "lamp_small": {
+      "footprint": [1, 1],
+      "height": 3,
+      "entries": [],
+      "variants": ["default"]
+    },
+    "shrub_small": {
+      "footprint": [1, 1],
+      "height": 1,
+      "entries": [],
+      "variants": ["default"]
+    }
+  }
+}
