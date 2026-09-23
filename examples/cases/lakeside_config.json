@@ -1,0 +1,13 @@
+{
+ "protected_zones": [],
+ "editable_zone": null,
+ "budget": {
+  "max_blocks": 20000
+ },
+ "anchors": {
+  "entry_start": [
+   105,
+   53
+  ]
+ }
+}

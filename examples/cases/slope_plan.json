@@ -1,0 +1,37 @@
+{
+ "schema_version": "0.1",
+ "scene_id": "terrain-slope",
+ "seed": 42,
+ "style_id": "rustic",
+ "operations": [
+  {
+   "id": "pavilion_1",
+   "op": "place_asset",
+   "asset_id": "pavilion_small",
+   "site_id": "site_07",
+   "variant": "north"
+  },
+  {
+   "id": "path_1",
+   "op": "connect_path",
+   "from": "entry_start",
+   "to": "pavilion_1.entry",
+   "width": 3,
+   "palette_id": "stone_path"
+  },
+  {
+   "id": "lights_1",
+   "op": "decorate_path",
+   "path_id": "path_1",
+   "asset_id": "lamp_small",
+   "spacing": 8
+  },
+  {
+   "id": "shrubs_1",
+   "op": "scatter_assets",
+   "zone_id": "plant_07",
+   "asset_id": "shrub_small",
+   "count": 12
+  }
+ ]
+}
