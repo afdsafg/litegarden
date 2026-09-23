@@ -77,6 +77,28 @@ def _cmd_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_pack(args: argparse.Namespace) -> int:
+    from .agent import build_agent_pack
+
+    scene = load_scene(args.input)
+    analysis = _analysis(scene, getattr(args, "config", None))
+    config = None
+    cfg_path = getattr(args, "config", None)
+    if cfg_path:
+        import os
+        if os.path.exists(cfg_path):
+            config = json.loads(open(cfg_path, encoding="utf-8").read())
+    payload = build_agent_pack(scene, analysis, _assets_dir(args), Path(args.out), config)
+    print(json.dumps({
+        "out": str(args.out),
+        "sites": len(payload["site_candidates"]),
+        "anchors": len(payload["anchors"]),
+        "zones": len(payload["zones"]),
+        "images": payload["images"],
+    }, indent=2))
+    return 0
+
+
 def _cmd_compile(args: argparse.Namespace) -> int:
     scene = load_scene(args.input)
     plan = parse_plan(Path(args.plan).read_text(encoding="utf-8"))
@@ -170,6 +192,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("inspect", help="load and summarize a litematic")
     add_io(sp)
     sp.set_defaults(func=_cmd_inspect)
+
+    sp = sub.add_parser("pack", help="write the Agent input pack (analysis.json + images + whitelist)")
+    add_io(sp)
+    add_assets(sp)
+    sp.set_defaults(func=_cmd_pack)
 
     sp = sub.add_parser("compile", help="compile a plan into a PatchSet")
     add_io(sp)

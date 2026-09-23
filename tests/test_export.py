@@ -35,12 +35,12 @@ def test_changes_projection_only_non_air(tmp_path: Path):
     region = next(iter(changes.regions.values()))
     # Only the non-air change is present; the removal is not in the projection.
     ids = {
-        region.getblock(x, y, z).id
+        region[(x, y, z)].id
         for x, y, z in region.block_positions()
     }
     assert GRASS in ids
     # bounding box spans both edits but the removed cell reads as air
-    assert region.getblock(0, 0, 0).id in (GRASS, AIR)
+    assert region[(0, 0, 0)].id in (GRASS, AIR)
 
 
 def test_changes_projection_empty_raises(tmp_path: Path):
