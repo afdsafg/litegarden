@@ -11,3 +11,6 @@ output/
 
 terrain.litematic
 *.litematic
+
+# PI-Desktop session artifacts (goal contract, scratch mirrors)
+.pi/

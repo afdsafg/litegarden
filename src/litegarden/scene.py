@@ -103,6 +103,9 @@ class BlockChange:
     """One net change against the original baseline.
 
     Absent coordinate = untouched; after == minecraft:air = explicit removal.
+    ``action`` names what the write is doing ("place" / "path" / "support" /
+    "clear" / "decorate" / "restore") so the write gate can decide whether the
+    block and the action are inside the verified rules.
     """
 
     region_id: str
@@ -110,6 +113,7 @@ class BlockChange:
     before: str  # block id at original baseline
     after: str  # block id after change (AIR means explicit removal)
     op_id: str
+    action: str = "place"
 
 
 @dataclass
