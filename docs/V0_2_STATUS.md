@@ -41,7 +41,7 @@
   - `ensure_export_preserved`：重读导出后逐字段比对，并检查方块实体宿主；失败抛 `NbtPreservationError` 或 `BLOCK_ENTITY_HOST_CHANGED`。
   - raw NBT 输入门禁：多 Region / `Regions` 类型错误 / 缺失 → 解码前拒绝（C05）。
   - `block_state_from_string`：`after` 携带属性时正确构造 `BlockState`（此前会直接失败）。
-- data version 门禁：由 `assets/block_rules.json` 的 `editable_data_versions` 声明；声明后不在白名单的版本一律拒绝编辑，**不因"能读能渲染"放行**（C06）。
+  - data version 门禁：由 `assets/block_rules.json` 的 `editable_data_versions` 声明；声明后不在白名单的版本一律拒绝编辑，**不因"能读能渲染"放行**（C06）。
 - 导出改为"先写临时文件 → 重读校验 → 原子替换"，失败不会留下新的 `full.litematic`。
 
 ### P1 通行、入口与挖填（矩阵 D）
@@ -54,7 +54,10 @@
   - 每个坐标只由最先覆盖它的横截面铺装一次，避免相邻截面互相压盖。
   - 1 格高差自动生成半砖过渡；palette 未声明 `transition` 时直接拒绝该路线。
   - 悬空地形（天然突出地面）向下补支撑柱，有界深度。
-- `src/litegarden/compiler.py`：**所有装饰完成之后**在最终候选上复检——中心线用 `check_road`，其余铺装格逐格检查，入口用 `check_entry`；任一问题拒绝整个候选。
+  - 路面末端进入建筑投影（亭子地板下方）的格子不再铺装，该处改由入口契约负责。
+  - 铺装与实际地形相接处若出现 1 格高差，同样在半砖可放的位置生成边界过渡。
+- `src/litegarden/compiler.py`：**所有装饰完成之后**在最终候选上复检——道路表面按路径顺序取"实际铺装格，未铺装格取现有地形可行走表面"（不再遇到第一个空缺就停止），其余铺装格逐格检查，入口用 `check_entry`。
+  - 落在**编译器刻意未改动列**（`roads[].skipped` 有记录）上的残留通行问题记为 `manual_review` 诊断并附坐标（任务书 §15.6：无法完整验证时默认 NEEDS_MANUAL_REVIEW，绝不静默放行）；入口契约问题与编译器写过的列一律为硬错误。
 - 真实挖填（净修改体素去重）与搜索估计**分别报告**（`stats.cut/fill/replace` 与 `stats.estimated_cut/estimated_fill`），硬预算独立于代价估计。
 
 ## 2. 明确未实现（本轮范围外，任务书 P2–P6）

@@ -197,9 +197,14 @@ class RoadPlan:
     positions: List[Vec2] = field(default_factory=list)
     levels: List[int] = field(default_factory=list)
     width: int = 1
-    estimated: Dict[str, int] = field(default_factory=dict)
     segments: List[Tuple[Vec3, ...]] = field(default_factory=list)
+    # The actual road surface in path order: the surface voxel of each
+    # centreline column, whichever cross-section happened to pave it. Needed
+    # because neighbouring cross-sections overlap and a column is paved only
+    # once.
+    centerline: List[Vec3] = field(default_factory=list)
     changes: List[BlockChange] = field(default_factory=list)
+    estimated: Dict[str, int] = field(default_factory=dict)
     transitions: List[Vec3] = field(default_factory=list)
     skipped: List[dict] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
@@ -347,6 +352,7 @@ def solve_road(
     # therefore paved exactly once - by the first position that covers it - and
     # the step transitions then run along the leading band of each position.
     claimed: Set[Vec2] = set()
+    paved_columns: Dict[Vec2, Vec3] = {}
     for i, (cx, cz) in enumerate(path):
         level = plan.levels[i]
         cells = cell_info[i]
@@ -424,6 +430,7 @@ def solve_road(
                 emit((x, y, z), support_block, "support")
             emit((x, level, z), blk, "path")
             paved.append((x, level, z))
+            paved_columns[(x, z)] = (x, level, z)
         plan.segments.append(tuple(paved))
 
     # ---- pass 3: step transitions ------------------------------------------
@@ -447,6 +454,50 @@ def solve_road(
                 continue
             emit((x, y, z), transition_block, "path")
             plan.transitions.append((x, y, z))
+
+    from ..traversal import classify_state
+
+    def walk_surface(x: int, z: int, level: int):
+        """The voxel a walker stands on in this column, at or below ``level``."""
+        for y in range(level, -1, -1):
+            if classify_state(block((x, y, z))).walkable:
+                return (x, y, z)
+        return None
+
+    levels_by_column = {p: plan.levels[i] for i, p in enumerate(path)}
+    for (cx, cz) in path:
+        voxel = paved_columns.get((cx, cz))
+        if voxel is None:
+            # The column was deliberately not paved (an untouchable block or no
+            # clearance). The walk surface there is whatever the existing
+            # terrain offers, so the final check can still measure continuity
+            # instead of silently stopping at the gap.
+            voxel = walk_surface(cx, cz, levels_by_column[(cx, cz)])
+        if voxel is None:
+            break
+        plan.centerline.append(voxel)
+
+    # ---- pass 4: transitions between pavement and existing terrain ---------
+    if transition_block is not None:
+        for i in range(len(plan.centerline) - 1):
+            a_vox = plan.centerline[i]
+            b_vox = plan.centerline[i + 1]
+            a_shape = classify_state(block(a_vox))
+            b_shape = classify_state(block(b_vox))
+            if not (a_shape.walkable and b_shape.walkable):
+                continue
+            rise = (b_vox[1] + b_shape.surface) - (a_vox[1] + a_shape.surface)
+            if abs(abs(rise) - 1.0) > 1e-6:
+                continue
+            lower = a_vox if rise > 0 else b_vox
+            target = (lower[0], lower[1] + 1, lower[2])
+            if not snapshot.contains_local(target) or not removable_at(target):
+                continue
+            if target in pending:
+                continue
+            emit(target, transition_block, "path")
+            plan.transitions.append(target)
+
     return plan
 
 

@@ -303,20 +303,15 @@ def _entry_contracts(ctx: _Ctx, world, min_headroom: int) -> List[dict]:
 
 
 def _road_cells(plan: RoadPlan) -> List[Vec3]:
-    """Contiguous paved run of centreline road-surface voxels.
+    """The road surface in path order, as it was actually built.
 
-    The list stops where the pavement stops (a cell under a finished building is
-    intentionally not paved), so the walkability check covers the road that was
-    actually built rather than an idealised centreline.
+    A column is paved once, by whichever cross-section reached it first, so the
+    surface of a centreline column may have been laid by a neighbouring
+    position. The sequence stops wherever the pavement stops (a cell under a
+    finished building is intentionally not paved), so the walkability check
+    covers the road that exists rather than an idealised centreline.
     """
-    cells: List[Vec3] = []
-    for i, (cx, cz) in enumerate(plan.positions):
-        seg = plan.segments[i] if i < len(plan.segments) else ()
-        match = [v for v in seg if v[0] == cx and v[2] == cz]
-        if not match:
-            break
-        cells.append(match[0])
-    return cells
+    return list(plan.centerline)
 
 
 def compile_plan(
@@ -423,6 +418,24 @@ def compile_plan(
                     min_headroom=min_headroom,
                     max_fill_depth=max_fill_depth,
                 )
+                # The road legitimately ends at a building footprint: the cells
+                # under it are covered by the structure and the entry contract
+                # takes over from there, so they are not part of the road that
+                # the walkability check must vouch for.
+                footprints = [
+                    (pl.origin, pl.asset.footprint) for pl in ctx.asset_placements
+                ]
+                if footprints:
+                    trimmed = []
+                    for voxel in road.centerline:
+                        inside = any(
+                            ox <= voxel[0] < ox + fx and oz <= voxel[2] < oz + fz
+                            for (ox, oz), (fx, fz) in footprints
+                        )
+                        if inside:
+                            break
+                        trimmed.append(voxel)
+                    road.centerline = trimmed
                 absorb(road.changes, target_id=op.id)
                 ctx.placed[op.id] = {"path": path, "road": road, "palette": palette}
                 ctx.roads.append(road)
@@ -505,8 +518,14 @@ def compile_plan(
     issues: List[dict] = []
     diagnostics: List[dict] = []
     if check_walkability:
+        untouched = {
+            (s["pos"][0], s["pos"][1])
+            for road in ctx.roads
+            for s in road.skipped
+        }
         issues, diagnostics = run_final_checks(
-            world, ctx.roads, entries, min_headroom=min_headroom
+            world, ctx.roads, entries, min_headroom=min_headroom,
+            untouched_columns=untouched,
         )
         diagnostics.append({"code": "SLICE_BOTTOM_POLICY", "detail": SLICE_BOTTOM_POLICY})
 
@@ -551,6 +570,7 @@ def run_final_checks(
     *,
     min_headroom: int = 2,
     slice_bottom_y: int = 0,
+    untouched_columns: Optional[Set[Tuple[int, int]]] = None,
 ) -> Tuple[List[dict], List[dict]]:
     """Walkability / entry checks on the *finished* staged candidate.
 
@@ -558,8 +578,15 @@ def run_final_checks(
     on the final candidate rather than only on an intermediate stage.
 
     Returns ``(errors, diagnostics)``. A support issue for a voxel sitting on
-    the input slice's bottom layer is a diagnostic, not an error: the block
     below is outside the file and cannot be evaluated either way.
+    below is outside the file and cannot be evaluated either way.
+
+    ``untouched_columns`` are the columns the compiler deliberately did not
+    modify (recorded in ``roads[].skipped``). A residual issue there is
+    reported as a ``manual_review`` diagnostic with its coordinates instead of
+    a hard error: the spec's default for a modification region that cannot be
+    fully verified is NEEDS_MANUAL_REVIEW, never a silent pass. Issues on
+    columns the compiler *did* write stay hard errors.
     """
     from .traversal import (
         PROFILE_WALK_NO_JUMP_V1,
@@ -572,7 +599,7 @@ def run_final_checks(
     errors: List[dict] = []
     diagnostics: List[dict] = []
 
-    def emit(issue_list, op_id: str) -> None:
+    def emit(issue_list, op_id: str, hard: bool = False) -> None:
         for it in issue_list:
             record = {
                 "code": it.code,
@@ -583,11 +610,29 @@ def run_final_checks(
                 "detail": it.detail,
                 "op_id": op_id,
             }
+            column = (it.pos_local[0], it.pos_local[2])
             if it.code == "SUPPORT_RULE_VIOLATION" and it.pos_local[1] <= slice_bottom_y:
                 record["unverifiable"] = True
                 record["detail"] = (
                     (it.detail + " ") if it.detail else ""
                 ) + SLICE_BOTTOM_POLICY
+                diagnostics.append(record)
+            elif hard:
+                # An entry contract is an explicit promise about the finished
+                # candidate; a decoration that blocks a doorway is our defect
+                # regardless of which column it sits in.
+                errors.append(record)
+            elif untouched_columns and column in untouched_columns:
+                # The compiler deliberately left this column alone (its record
+                # is in roads[].skipped); the residual issue is unverified
+                # rather than introduced, so it goes to manual review.
+                record["manual_review"] = True
+                record["detail"] = (
+                    (it.detail + " ") if it.detail else ""
+                ) + (
+                    "column was deliberately not modified (see roads[].skipped); "
+                    "residual walkability issue requires in-game confirmation"
+                )
                 diagnostics.append(record)
             else:
                 errors.append(record)
@@ -663,7 +708,7 @@ def run_final_checks(
                     "unverifiable": True,
                 })
         else:
-            emit(entry_issues, entry["op_id"])
+            emit(entry_issues, entry["op_id"], hard=True)
     return (
         sorted(errors, key=lambda i: (i["pos_local"], i["code"])),
         sorted(diagnostics, key=lambda i: (i["pos_local"], i["code"])),

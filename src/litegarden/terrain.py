@@ -93,11 +93,12 @@ def analyze(snapshot: SceneSnapshot, min_headroom: int = 2) -> TerrainAnalysis:
                 headroom[x, z] = hr
 
             # Cover-tolerant buildable surface (see TerrainAnalysis docstring).
-            # Scan down from the top: air and known non-colliding cover may be
-            # passed, the first remaining block decides. A column qualifies
-            # only when that block is verified ground and the next
-            # `min_headroom` voxels above it are air or cover, so a canopy
-            # high above the road does not disqualify it.
+            # Scan down from the top, skipping air and known non-colliding
+            # cover. A non-ground block above the ground (a canopy, a placed
+            # object) does not by itself disqualify the column: what matters is
+            # the clearance directly above the ground block, which the check
+            # below tests. That is what lets a road run under a canopy while a
+            # block hugging the ground still blocks the column.
             b = -1
             cov: List[int] = []
             for y in range(sy - 1, -1, -1):
@@ -112,7 +113,7 @@ def analyze(snapshot: SceneSnapshot, min_headroom: int = 2) -> TerrainAnalysis:
                     for k in range(1, min_headroom + 1)
                 ):
                     b = y
-                break
+                    break
             build[x, z] = b
             if b >= 0 and cov:
                 cover_above[(x, z)] = tuple(sorted(c for c in cov if c > b))
