@@ -8,3 +8,6 @@ dist/
 build/
 work/
 output/
+
+terrain.litematic
+*.litematic
