@@ -1,0 +1,122 @@
+{
+ "schema_version": "0.2",
+ "demo_data": true,
+ "note": "演示数据（web/fixtures/demo_panels.json）：字段形状对应任务书 §17.2 的项目片段，内容为演示值。",
+ "protected_areas": [
+  {
+   "id": "prot_demo_01",
+   "label": "演示：老橡树（保护区）",
+   "bounds": {
+    "min": [
+     12,
+     0,
+     23
+    ],
+    "max_exclusive": [
+     15,
+     14,
+     26
+    ]
+   },
+   "read_only": true,
+   "source": "演示夹具（真实来源应由后端注册表给出）"
+  },
+  {
+   "id": "prot_demo_02",
+   "label": "演示：水塘边缘（保护区）",
+   "bounds": {
+    "min": [
+     5,
+     0,
+     32
+    ],
+    "max_exclusive": [
+     10,
+     4,
+     37
+    ]
+   },
+   "read_only": true,
+   "source": "演示夹具"
+  }
+ ],
+ "assets": [
+  {
+   "object_id": "asset_demo_pavilion",
+   "kind": "pavilion",
+   "asset_version": "v0-demo",
+   "creation_revision": "r001",
+   "bounds": {
+    "min": [
+     12,
+     0,
+     24
+    ],
+    "max_exclusive": [
+     19,
+     5,
+     31
+    ]
+   },
+   "status": "demo_only"
+  }
+ ],
+ "history": [
+  {
+   "revision_id": "r000",
+   "kind": "accepted",
+   "label": "初始地形（B0，只读查看）"
+  },
+  {
+   "revision_id": "r001",
+   "kind": "accepted",
+   "label": "演示：一次已接受的局部修改"
+  },
+  {
+   "revision_id": "c004",
+   "kind": "candidate",
+   "label": "演示：待审查候选（未接受）"
+  }
+ ],
+ "issues": [
+  {
+   "code": "PATH_HEADROOM_BLOCKED",
+   "pos_local": [
+    13,
+    4,
+    24
+   ],
+   "rule_id": "traversal.headroom",
+   "expected": "净空 >= 3",
+   "actual": "净空 = 2",
+   "severity": "error",
+   "demo": true
+  },
+  {
+   "code": "WRITE_PROTECTED",
+   "pos_local": [
+    6,
+    1,
+    35
+   ],
+   "rule_id": "protect.mask",
+   "expected": "保护区不可写",
+   "actual": "净变化包含该坐标",
+   "severity": "error",
+   "demo": true
+  },
+  {
+   "code": "SUPPORT_RULE_VIOLATION",
+   "pos_local": [
+    16,
+    3,
+    28
+   ],
+   "rule_id": "asset.support",
+   "expected": "登记地基范围内",
+   "actual": "悬空 1 格",
+   "severity": "error",
+   "demo": true
+  }
+ ]
+}

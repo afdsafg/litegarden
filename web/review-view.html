@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LiteGarden 取证视图（review-view）</title>
+<!--
+  与工作台**同一构建、同一资源、同一适配层**，但没有任何交互 chrome：
+  只有一个铺满窗口的视口。自动化（Playwright/CDP）打开本页后用
+  window.LiteGardenReview 摆相机 / 切切片 / 等渲染完成，再对该元素截图。
+
+  页面自己会在打开时自动加载 ?scene=（默认 ../work/sample_render_scene.json），
+  所以"没有用户操作"也能确定性地产出图像。若加载失败，会在
+  <html data-review-ready="failed" data-review-error="..."> 上留下原因，
+  并且不会生成任何"渲染成功"的假象。
+
+  可选参数：
+    ?scene=<url>        RenderScene JSON（默认 ../work/sample_render_scene.json）
+    ?slice=min:max      初始切片（crop 局部 Y，含端点）
+    ?view=top|oblique_b 初始相机预设（默认斜视角 A，与上游 reset_view 一致）
+-->
+<link rel="stylesheet" href="styles.css" />
+<script src="vendor/litematica-viewer/resource/vendor/gl-matrix-3.4.3.js"></script>
+<script src="vendor/litematica-viewer/resource/vendor/deepslate-0.10.1.js"></script>
+<script src="vendor/litematica-viewer/resource/assets.js"></script>
+<script src="vendor/litematica-viewer/resource/opaque.js"></script>
+<script src="vendor/litematica-viewer/upstream/deepslate-helpers.js"></script>
+<script src="vendor/litematica-viewer/upstream/viewer-lite.js"></script>
+</head>
+
+<body class="review">
+<div id="review-viewport" class="review__viewport"></div>
+<p class="sr-only" role="status" aria-live="polite">
+  取证视图：使用 window.LiteGardenReview 控制相机与切片，并等待 screenshotReady() 后再截图。
+</p>
+<script type="module" src="review_bridge.js"></script>
+</body>
+</html>

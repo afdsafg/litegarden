@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LiteGarden 本地工作台</title>
+<!--
+  加载顺序是硬要求：
+  1) 锁定版本的 vendor 库（gl-matrix / deepslate）与资源表（assets.js / opaque.js）是**全局脚本**；
+  2) 两个上游派生文件（逐字节副本 + 渲染提取）同样是全局脚本，不能用 type="module"；
+  3) app.js 是 ES module（type="module" 天然 defer），在所有全局脚本之后执行。
+
+  页面不访问 CDN、不做构建、没有框架。RenderScene 通过 fetch 读取，不执行任何由蓝图生成的 JS
+  （因此不再沿用上游的 window.LV_PAYLOAD 覆盖机制）。
+-->
+<link rel="stylesheet" href="styles.css" />
+<script src="vendor/litematica-viewer/resource/vendor/gl-matrix-3.4.3.js"></script>
+<script src="vendor/litematica-viewer/resource/vendor/deepslate-0.10.1.js"></script>
+<script src="vendor/litematica-viewer/resource/assets.js"></script>
+<script src="vendor/litematica-viewer/resource/opaque.js"></script>
+<script src="vendor/litematica-viewer/upstream/deepslate-helpers.js"></script>
+<script src="vendor/litematica-viewer/upstream/viewer-lite.js"></script>
+</head>
+
+<body class="app">
+
+<header class="topbar">
+  <div class="topbar__brand">
+    <span class="topbar__mark" aria-hidden="true"></span>
+    <span class="topbar__name">LiteGarden</span>
+    <span class="topbar__sub">本地工作台 <span class="topbar__stage">P1 · 只读视图</span></span>
+  </div>
+
+  <dl class="facts">
+    <div class="fact">
+      <dt>项目</dt>
+      <dd id="fact-project" title="后端 /api/projects 未实现，当前按 URL 参数显示">未连接</dd>
+    </div>
+    <div class="fact">
+      <dt>当前修订</dt>
+      <dd id="fact-revision">—</dd>
+    </div>
+    <div class="fact">
+      <dt>场景 hash</dt>
+      <dd class="mono" id="fact-scene-hash">—</dd>
+    </div>
+    <div class="fact">
+      <dt>文件 sha256</dt>
+      <dd class="mono" id="fact-file-hash">—</dd>
+    </div>
+  </dl>
+
+  <div class="topbar__actions">
+    <button type="button" class="btn btn--ghost" id="btn-export" aria-describedby="placeholder-note">导出…</button>
+    <span class="chip chip--warn" id="placeholder-note">占位（需后端 /api/.../exports）</span>
+  </div>
+</header>
+
+<main class="workbench">
+
+  <!-- ================= 左栏：图层 / 保护区 / 资产实例 / 历史 ================= -->
+  <aside class="panel panel--left" aria-label="图层与注册表">
+    <section class="panel__section" data-enter="0">
+      <h2>图层</h2>
+      <div class="toggles" role="group" aria-label="显示图层开关">
+        <label class="toggle">
+          <input type="checkbox" id="layer-grid" checked />
+          <span>地面网格</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="layer-hidden-outlines" checked />
+          <span>隐藏层线框</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="layer-overlay" checked />
+          <span>叠加层（选区 / Diff）</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="layer-fade" checked />
+          <span>叠加层景深淡出</span>
+        </label>
+      </div>
+      <p class="hint">图层只影响显示；不会写回蓝图，也不会改变诊断里的方块计数。</p>
+    </section>
+
+    <section class="panel__section" data-enter="1">
+      <h2>保护区 <span class="count" id="count-protected">0</span></h2>
+      <ul class="list" id="list-protected" aria-live="polite"></ul>
+      <p class="hint" id="hint-protected">未提供保护区数据（后端 /api/projects/{p} 未实现）。</p>
+    </section>
+
+    <section class="panel__section" data-enter="2">
+      <h2>资产实例 <span class="count" id="count-assets">0</span></h2>
+      <ul class="list" id="list-assets" aria-live="polite"></ul>
+      <p class="hint" id="hint-assets">未提供资产注册表（后端 objects/ 未接入）。</p>
+    </section>
+
+    <section class="panel__section" data-enter="3">
+      <h2>历史 <span class="count" id="count-history">0</span></h2>
+      <ul class="list" id="list-history" aria-live="polite"></ul>
+      <p class="hint" id="hint-history">未提供修订列表；本构建不伪造 revision。</p>
+    </section>
+  </aside>
+
+  <!-- ================= 中央：唯一主视口 ================= -->
+  <section class="stage" aria-label="三维视口">
+    <div class="stage__toolbar">
+      <div class="segmented" role="radiogroup" aria-label="交互模式" id="mode-switch">
+        <button type="button" role="radio" aria-checked="true" data-mode="navigate" id="mode-navigate">导航</button>
+        <button type="button" role="radio" aria-checked="false" data-mode="select" id="mode-select">框选</button>
+        <button type="button" role="radio" aria-checked="false" data-mode="pick" id="mode-pick">拾取</button>
+      </div>
+
+      <div class="segmented" role="radiogroup" aria-label="场景切换" id="scene-switch">
+        <button type="button" role="radio" aria-checked="true" data-view="current" id="view-current">当前</button>
+        <button type="button" role="radio" aria-checked="false" data-view="candidate" id="view-candidate">候选</button>
+        <button type="button" role="radio" aria-checked="false" data-view="diff" id="view-diff">Diff</button>
+      </div>
+
+      <button type="button" class="btn btn--quiet" id="btn-reset-view">重置视角</button>
+      <span class="chip" id="chip-mode-hint">导航：左键旋转 · 中/右键或 Shift+左键平移 · 滚轮推拉 · WASD 移动</span>
+    </div>
+
+    <div class="viewport" id="viewport">
+      <!-- 适配层在这里创建 WebGL canvas 与 2D 叠加 canvas -->
+      <div class="viewport__notice" id="viewport-notice" hidden>
+        <p class="viewport__notice-title" id="viewport-notice-title"></p>
+        <p class="viewport__notice-detail" id="viewport-notice-detail"></p>
+      </div>
+      <div class="viewport__hud mono" id="viewport-hud" hidden></div>
+    </div>
+
+    <div class="slice-bar">
+      <span class="slice-bar__label">Y 切片<em>仅显示</em></span>
+      <input type="range" id="slice-min" min="0" max="0" step="1" value="0" aria-label="切片下界（crop 局部 Y）" />
+      <input type="range" id="slice-max" min="0" max="0" step="1" value="0" aria-label="切片上界（crop 局部 Y）" />
+      <output class="mono" id="slice-readout" for="slice-min slice-max">—</output>
+      <button type="button" class="btn btn--quiet" id="btn-slice-full">全层</button>
+    </div>
+
+    <div class="statusbar" role="status" aria-live="polite">
+      <span class="statusbar__state" id="status-state">就绪</span>
+      <span class="statusbar__sep" aria-hidden="true"></span>
+      <span class="statusbar__text mono" id="status-text">等待加载 RenderScene…</span>
+    </div>
+  </section>
+
+  <!-- ================= 右栏：选区 / 指令 / 生成状态 / 硬错误 ================= -->
+  <aside class="panel panel--right" aria-label="选区与任务">
+
+    <section class="panel__section" data-enter="0">
+      <h2>选区 <span class="chip chip--sel">project_local</span></h2>
+
+      <div class="readout" id="selection-readout">
+        <div class="readout__row"><span>X 区间</span><b class="mono" id="sel-x">—</b></div>
+        <div class="readout__row"><span>Y 区间</span><b class="mono" id="sel-y">—</b></div>
+        <div class="readout__row"><span>Z 区间</span><b class="mono" id="sel-z">—</b></div>
+        <div class="readout__row"><span>尺寸</span><b class="mono" id="sel-size">—</b></div>
+        <div class="readout__row"><span>体素数</span><b class="mono" id="sel-voxels">—</b></div>
+        <div class="readout__row"><span>非空气</span><b class="mono" id="sel-nonair">—</b></div>
+        <div class="readout__row"><span>来源</span><b class="mono" id="sel-source">—</b></div>
+      </div>
+      <p class="hint" id="sel-hint">半开区间 [min, max_exclusive)：min=[10,5,20]、max=[20,15,30] 是 10×10×10。</p>
+      <p class="hint hint--warn" id="sel-auth">预计授权范围：最终以服务端 WriteGuard ∩ 可编辑 ∩ 非保护区 为准。</p>
+
+      <div class="field-row">
+        <label for="y-min">授权 Y 下界</label>
+        <input type="number" id="y-min" step="1" inputmode="numeric" aria-describedby="sel-hint" />
+        <label for="y-max">上界</label>
+        <input type="number" id="y-max" step="1" inputmode="numeric" aria-describedby="sel-hint" />
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn btn--quiet" id="btn-y-full">取全高</button>
+        <button type="button" class="btn btn--quiet" id="btn-sel-clear">清空选区</button>
+      </div>
+      <p class="hint" id="y-feedback">Y 范围是**授权**范围，和渲染切片互不影响。</p>
+
+      <div class="map-wrap">
+        <canvas id="top-view" class="top-view" aria-label="俯视图：拖选 x/z 矩形；方向键移动，Shift+方向键伸缩，Esc 清空"></canvas>
+      </div>
+      <p class="hint" id="map-legend">俯视图范围 = 当前渲染 crop；x 向右、z 向下；颜色取自贴图图集的顶面平均色，无贴图的条目按高度灰阶显示。</p>
+      <p class="hint mono" id="map-hover">把鼠标移到俯视图上查看该列最高非空气方块。</p>
+    </section>
+
+    <section class="panel__section" data-enter="1">
+      <h2>3D 拾取</h2>
+      <p class="hint">切到「拾取」模式后点击方块：第一次点设角点 A，第二次点设角点 B，立即得到三维选区。选中的是**体素格**，不代表真实碰撞。</p>
+      <div class="readout" id="pick-readout">
+        <div class="readout__row"><span>角点 A</span><b class="mono" id="pick-a">—</b></div>
+        <div class="readout__row"><span>角点 B</span><b class="mono" id="pick-b">—</b></div>
+        <div class="readout__row"><span>命中面</span><b class="mono" id="pick-face">—</b></div>
+        <div class="readout__row"><span>方块</span><b class="mono" id="pick-block">—</b></div>
+      </div>
+      <div class="field-row">
+        <label for="plane-y">框选工作平面 Y</label>
+        <input type="number" id="plane-y" step="1" inputmode="numeric" />
+        <span class="hint">（crop 局部，水平面）</span>
+      </div>
+      <p class="hint" id="pick-hint">水平工作平面框选：在「框选」模式下于 3D 视口拖动，射线打到该水平面上取 x/z 矩形。</p>
+    </section>
+
+    <section class="panel__section" data-enter="2">
+      <h2>Diff 叠加</h2>
+      <ul class="legend" id="diff-legend"></ul>
+      <p class="hint" id="diff-note">未加载净变化数据（后端 /api/candidates/{c}/diff）。可用 ?diff= 指定一个 JSON。</p>
+    </section>
+
+    <section class="panel__section" data-enter="3">
+      <h2>任务指令</h2>
+      <label class="sr-only" for="instruction">任务指令</label>
+      <textarea id="instruction" rows="4" placeholder="例如：在选区内加一座小凉亭，保留现有橡木树与道路接口。"></textarea>
+      <div class="btn-row">
+        <button type="button" class="btn btn--primary" id="btn-generate">生成（占位）</button>
+        <span class="chip chip--warn">不会发送任何请求</span>
+      </div>
+      <p class="hint" id="instruction-hint">0 字符。生成需要后端 <code>POST /api/projects/{p}/redesign-tasks</code>；本构建只显示冻结请求预览。</p>
+      <details class="frozen">
+        <summary>冻结请求预览（未发送）</summary>
+        <pre class="code" id="request-preview">（等待选区与指令）</pre>
+      </details>
+    </section>
+
+    <section class="panel__section" data-enter="4">
+      <h2>生成状态</h2>
+      <div class="readout">
+        <div class="readout__row"><span>状态</span><b id="job-state">未开始</b></div>
+        <div class="readout__row"><span>候选</span><b class="mono" id="job-candidate">—</b></div>
+        <div class="readout__row"><span>说明</span><b id="job-note">后端任务接口未实现</b></div>
+      </div>
+    </section>
+
+    <section class="panel__section" data-enter="5">
+      <h2>硬错误 <span class="count" id="count-issues">0</span></h2>
+      <ul class="issues" id="issue-list" aria-live="polite"></ul>
+      <p class="hint">渲染诊断（缺资源 / 非法调色板 / 载荷不一致）也会出现在这里，可点击定位到坐标。</p>
+    </section>
+
+    <section class="panel__section" data-enter="6">
+      <h2>渲染诊断</h2>
+      <div class="btn-row">
+        <button type="button" class="btn btn--quiet" id="btn-refresh-diag">刷新</button>
+        <button type="button" class="btn btn--quiet" id="btn-copy-diag">复制 JSON</button>
+      </div>
+      <details class="frozen">
+        <summary>getDiagnostics()（实时）</summary>
+        <pre class="code code--tall" id="diagnostics-json">—</pre>
+      </details>
+      <p class="hint">accepted_voxel_count 是提交给场景模型的方块数，不是可见像素数或面数。</p>
+    </section>
+  </aside>
+</main>
+
+<!-- ================= 底栏：Before/After 与占位操作 ================= -->
+<footer class="bottom">
+  <div class="ba" id="before-after">
+    <div class="ba__cell">
+      <span class="ba__label">坐标（project_local）</span>
+      <b class="mono" id="ba-pos">—</b>
+    </div>
+    <div class="ba__cell">
+      <span class="ba__label">Before（当前/基线）</span>
+      <b class="mono" id="ba-before">—</b>
+    </div>
+    <div class="ba__cell">
+      <span class="ba__label">After（候选/净变化）</span>
+      <b class="mono" id="ba-after">—</b>
+    </div>
+    <div class="ba__cell">
+      <span class="ba__label">类别</span>
+      <b class="mono" id="ba-category">—</b>
+    </div>
+  </div>
+  <div class="bottom__actions">
+    <button type="button" class="btn btn--ok" id="btn-accept">接受候选</button>
+    <button type="button" class="btn btn--danger" id="btn-reject">拒绝候选</button>
+    <button type="button" class="btn btn--quiet" id="btn-undo">撤销</button>
+    <button type="button" class="btn btn--quiet" id="btn-redo">重做</button>
+    <span class="chip chip--warn">占位（需后端 CAS / 线性历史）</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<div class="sr-only" id="screenreader-status" role="status" aria-live="polite"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

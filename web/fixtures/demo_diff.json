@@ -1,0 +1,779 @@
+{
+ "schema_version": "0.2",
+ "demo_data": true,
+ "note": "演示数据（web/fixtures/demo_diff.json）：由 work/sample_render_scene.json 真实推导，用于验证 Diff 叠加的显示；不是后端 /api/candidates/{c}/diff 的产物。",
+ "scene_id": "sample_flat_demo_candidate",
+ "scene_hash": "bd022a940b925d0affe3207522e10c3ea0dff9b7a14de88f64b847ee1b68eee1(演示候选场景 hash 未计算)",
+ "base_revision": "r001",
+ "candidate_id": "demo_candidate",
+ "coordinate_space": "project_local",
+ "counts": {
+  "added": 30,
+  "removed": 6,
+  "replaced": 2,
+  "state_only": 4
+ },
+ "net_changes": [
+  {
+   "pos_local": [
+    18,
+    11,
+    26
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_000"
+  },
+  {
+   "pos_local": [
+    18,
+    11,
+    27
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_001"
+  },
+  {
+   "pos_local": [
+    18,
+    11,
+    28
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_002"
+  },
+  {
+   "pos_local": [
+    18,
+    7,
+    29
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_003"
+  },
+  {
+   "pos_local": [
+    18,
+    10,
+    30
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_004"
+  },
+  {
+   "pos_local": [
+    19,
+    7,
+    26
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_005"
+  },
+  {
+   "pos_local": [
+    19,
+    7,
+    27
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_006"
+  },
+  {
+   "pos_local": [
+    19,
+    7,
+    28
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_007"
+  },
+  {
+   "pos_local": [
+    19,
+    7,
+    29
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_008"
+  },
+  {
+   "pos_local": [
+    19,
+    7,
+    30
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_009"
+  },
+  {
+   "pos_local": [
+    20,
+    6,
+    26
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_010"
+  },
+  {
+   "pos_local": [
+    20,
+    7,
+    27
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_011"
+  },
+  {
+   "pos_local": [
+    20,
+    6,
+    28
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_012"
+  },
+  {
+   "pos_local": [
+    20,
+    6,
+    29
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_013"
+  },
+  {
+   "pos_local": [
+    20,
+    7,
+    30
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_014"
+  },
+  {
+   "pos_local": [
+    21,
+    7,
+    26
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_015"
+  },
+  {
+   "pos_local": [
+    21,
+    7,
+    27
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_016"
+  },
+  {
+   "pos_local": [
+    21,
+    6,
+    28
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_017"
+  },
+  {
+   "pos_local": [
+    21,
+    11,
+    29
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_018"
+  },
+  {
+   "pos_local": [
+    21,
+    11,
+    30
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_019"
+  },
+  {
+   "pos_local": [
+    22,
+    6,
+    26
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_020"
+  },
+  {
+   "pos_local": [
+    22,
+    6,
+    27
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_021"
+  },
+  {
+   "pos_local": [
+    22,
+    7,
+    28
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_022"
+  },
+  {
+   "pos_local": [
+    22,
+    11,
+    29
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_023"
+  },
+  {
+   "pos_local": [
+    22,
+    11,
+    30
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_024"
+  },
+  {
+   "pos_local": [
+    23,
+    11,
+    26
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_025"
+  },
+  {
+   "pos_local": [
+    23,
+    11,
+    27
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_026"
+  },
+  {
+   "pos_local": [
+    23,
+    10,
+    28
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_027"
+  },
+  {
+   "pos_local": [
+    23,
+    11,
+    29
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_028"
+  },
+  {
+   "pos_local": [
+    23,
+    13,
+    30
+   ],
+   "before": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:stone_bricks",
+    "props": {}
+   },
+   "category": "added",
+   "op_id": "op_add_029"
+  },
+  {
+   "pos_local": [
+    27,
+    7,
+    18
+   ],
+   "before": {
+    "name": "minecraft:leaf_litter",
+    "props": {
+     "facing": "north",
+     "segment_amount": "2"
+    }
+   },
+   "after": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "category": "removed",
+   "op_id": "op_del_000"
+  },
+  {
+   "pos_local": [
+    29,
+    7,
+    18
+   ],
+   "before": {
+    "name": "minecraft:short_grass",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "category": "removed",
+   "op_id": "op_del_001"
+  },
+  {
+   "pos_local": [
+    29,
+    7,
+    19
+   ],
+   "before": {
+    "name": "minecraft:leaf_litter",
+    "props": {
+     "facing": "east",
+     "segment_amount": "2"
+    }
+   },
+   "after": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "category": "removed",
+   "op_id": "op_del_002"
+  },
+  {
+   "pos_local": [
+    30,
+    7,
+    19
+   ],
+   "before": {
+    "name": "minecraft:leaf_litter",
+    "props": {
+     "facing": "north",
+     "segment_amount": "1"
+    }
+   },
+   "after": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "category": "removed",
+   "op_id": "op_del_003"
+  },
+  {
+   "pos_local": [
+    30,
+    7,
+    20
+   ],
+   "before": {
+    "name": "minecraft:leaf_litter",
+    "props": {
+     "facing": "south",
+     "segment_amount": "2"
+    }
+   },
+   "after": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "category": "removed",
+   "op_id": "op_del_004"
+  },
+  {
+   "pos_local": [
+    31,
+    7,
+    20
+   ],
+   "before": {
+    "name": "minecraft:leaf_litter",
+    "props": {
+     "facing": "west",
+     "segment_amount": "1"
+    }
+   },
+   "after": {
+    "name": "minecraft:air",
+    "props": {}
+   },
+   "category": "removed",
+   "op_id": "op_del_005"
+  },
+  {
+   "pos_local": [
+    21,
+    5,
+    28
+   ],
+   "before": {
+    "name": "minecraft:dirt",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:andesite",
+    "props": {}
+   },
+   "category": "replaced",
+   "op_id": "op_rep_000"
+  },
+  {
+   "pos_local": [
+    22,
+    5,
+    26
+   ],
+   "before": {
+    "name": "minecraft:dirt",
+    "props": {}
+   },
+   "after": {
+    "name": "minecraft:andesite",
+    "props": {}
+   },
+   "category": "replaced",
+   "op_id": "op_rep_001"
+  },
+  {
+   "pos_local": [
+    4,
+    8,
+    19
+   ],
+   "before": {
+    "name": "minecraft:oak_leaves",
+    "props": {
+     "distance": "1",
+     "persistent": "false",
+     "waterlogged": "false"
+    }
+   },
+   "after": {
+    "name": "minecraft:oak_leaves",
+    "props": {
+     "distance": "1",
+     "persistent": "false",
+     "waterlogged": "true"
+    }
+   },
+   "category": "state_only",
+   "op_id": "op_state_000"
+  },
+  {
+   "pos_local": [
+    4,
+    8,
+    20
+   ],
+   "before": {
+    "name": "minecraft:oak_leaves",
+    "props": {
+     "distance": "2",
+     "persistent": "false",
+     "waterlogged": "false"
+    }
+   },
+   "after": {
+    "name": "minecraft:oak_leaves",
+    "props": {
+     "distance": "2",
+     "persistent": "false",
+     "waterlogged": "true"
+    }
+   },
+   "category": "state_only",
+   "op_id": "op_state_001"
+  },
+  {
+   "pos_local": [
+    4,
+    9,
+    19
+   ],
+   "before": {
+    "name": "minecraft:oak_leaves",
+    "props": {
+     "distance": "1",
+     "persistent": "false",
+     "waterlogged": "false"
+    }
+   },
+   "after": {
+    "name": "minecraft:oak_leaves",
+    "props": {
+     "distance": "1",
+     "persistent": "false",
+     "waterlogged": "true"
+    }
+   },
+   "category": "state_only",
+   "op_id": "op_state_002"
+  },
+  {
+   "pos_local": [
+    4,
+    9,
+    20
+   ],
+   "before": {
+    "name": "minecraft:oak_leaves",
+    "props": {
+     "distance": "2",
+     "persistent": "false",
+     "waterlogged": "false"
+    }
+   },
+   "after": {
+    "name": "minecraft:oak_leaves",
+    "props": {
+     "distance": "2",
+     "persistent": "false",
+     "waterlogged": "true"
+    }
+   },
+   "category": "state_only",
+   "op_id": "op_state_003"
+  }
+ ]
+}
