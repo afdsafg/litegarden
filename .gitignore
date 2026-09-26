@@ -14,3 +14,7 @@ terrain.litematic
 
 # PI-Desktop session artifacts (goal contract, scratch mirrors)
 .pi/
+
+# Fetched third-party viewer runtime resources (hash-locked, not committed;
+# materialise with tools/fetch_viewer_assets.py --verify)
+web/vendor/litematica-viewer/resource/

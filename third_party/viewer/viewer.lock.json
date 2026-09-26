@@ -1,0 +1,69 @@
+{
+  "schema_version": "0.2",
+  "repository": "https://github.com/albertchen857/Litematica-viewer.git",
+  "commit": "65f41744eb372c8ffa40e23462fd13cb6168133f",
+  "commit_date": "2026-08-21T15:08:17+10:00",
+  "license": {
+    "file": "LICENSE",
+    "sha256": "ddd46856e91d5837789b84a80d7cf5a3689a3c0a3afe44246677fb669182be3b",
+    "spdx": "MIT"
+  },
+  "vendored_at": "2026-09-26",
+  "verbatim_files": {
+    "LICENSE": {
+      "vendored_as": "third_party/viewer/upstream/LICENSE",
+      "bytes": 1091,
+      "sha256": "ddd46856e91d5837789b84a80d7cf5a3689a3c0a3afe44246677fb669182be3b"
+    },
+    "script/JSrender/viewer.html": {
+      "vendored_as": "third_party/viewer/upstream/script__JSrender__viewer.html",
+      "bytes": 2805,
+      "sha256": "e48212bb4a20f1417d020c6c3d3663c74d9523eacd13133a1ae80c8bad10583e"
+    },
+    "script/JSrender/src/bridge.js": {
+      "vendored_as": "third_party/viewer/upstream/script__JSrender__src__bridge.js",
+      "bytes": 5639,
+      "sha256": "104393f9d305bd2d59714a011ff82be80ceea4a8759b3a2fa998aba7733746b7"
+    },
+    "script/JSrender/src/viewer.js": {
+      "vendored_as": "third_party/viewer/upstream/script__JSrender__src__viewer.js",
+      "bytes": 8026,
+      "sha256": "afaab5e8ccebf0e94368e018cfaa680b2691193e9907298e604c02ad5d67f3f9"
+    },
+    "script/JSrender/src/deepslate-helpers.js": {
+      "vendored_as": "third_party/viewer/upstream/script__JSrender__src__deepslate-helpers.js",
+      "bytes": 3823,
+      "sha256": "643df4d16ce1e30296de932ecf11a1d444ecd2fe313fb26b2d1cc85dddac1101"
+    },
+    "script/JSrender/src/litematic-utils.js": {
+      "vendored_as": "third_party/viewer/upstream/script__JSrender__src__litematic-utils.js",
+      "bytes": 5311,
+      "sha256": "45eb837c2a253c0e7691742095132aee5c770e96244f7a695ecb7f9a874bae57"
+    }
+  },
+  "runtime_resources": {
+    "script/JSrender/resource/assets.js": {
+      "bytes": 1711662,
+      "sha256": "fa00806d24915b6e418bd8f31e4e685b6a338bbff6ee283f7a52bd0cf90652bc",
+      "committed": false
+    },
+    "script/JSrender/resource/opaque.js": {
+      "bytes": 12955,
+      "sha256": "95e0069cd1f0c2d00bfe2813cfb047f8c99215bcb05006eccfe9e13d37b7682f",
+      "committed": false
+    },
+    "script/JSrender/resource/atlas.png": {
+      "bytes": 1815365,
+      "sha256": "e1c6e94326cb45a6b32a87ec550a2350b09c6b368254e30163d60cfee26ec03a",
+      "committed": false
+    }
+  },
+  "runtime_resource_policy": "not committed (size); tools/fetch_viewer_assets.py downloads them and verifies the recorded sha256 before use",
+  "js_dependencies": {
+    "deepslate": "https://unpkg.com/deepslate@0.10.1",
+    "gl-matrix": "https://unpkg.com/gl-matrix@3.4.3/gl-matrix-min.js"
+  },
+  "verified_minecraft_data_versions": [],
+  "verified_note": "no MinecraftDataVersion has been verified against the renderer yet; P6 in-game acceptance is outstanding",
+  "local_modifications": []
+}
