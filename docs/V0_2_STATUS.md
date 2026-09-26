@@ -101,3 +101,21 @@ python -m litegarden export terrain.litematic --plan examples/cases/flat_plan.js
 `write_log.jsonl` 是逐次写入的阶段日志；`nbt_preservation.json` 记录本次允许变化的 NBT 路径。
 
 游戏内验收清单见 `docs/ACCEPTANCE.md`（**P6 仍待执行**）。
+
+
+## 5. 独立审查发现与修复（P0 安全边界）
+
+本轮结束前做了一次只读对抗性代码审查，发现并修复了以下**真实缺陷**（修复后有回归测试）：
+
+| 发现 | 修复 |
+|---|---|
+| `--config` 写错/不存在时静默当成"没有规则"，保护、可编辑区、版本门禁同时失效 | 指明了但打不开的配置直接报错；`--assets` 下缺 `block_rules.json` 时 `compile`/`export` 拒绝运行，并留下 `POLICY_INPUT_INVALID` 的结构化错误 |
+| 原子提升与 `changes.litematic` 落盘未再校验目标路径，`--out` 指向输入目录时会覆盖源文件 | 两条落盘都先断言目标不等于输入路径，否则拒绝（退出码 2） |
+| 重读校验失败时可能残留 `full.litematic` / `.tmp` | 所有可能失败的产物都在提升之前生成；失败路径统一清理临时文件 |
+| 生产路径上宿主方块校验恒不通过（`apply_patchset` 原地改了快照，比较双方变成同一份） | 校验改用导入后的**未打补丁**场景副本 |
+| 2D `bbox` 形式可省略 Y 范围，等于静默授权所有高度 | `bbox` 形式必须显式给出 `min_y` / `max_y_exclusive` |
+| `policy_hash` 把"未声明"与"空集合"折叠成同一策略 | 摘要区分 `None` 与空集合 |
+| 工作视图语义哈希缓存不随写入失效 | 每次写入使缓存失效 |
+| 缺少 `export` 端到端门禁的回归测试 | 新增 `tests/test_export_gates.py`：保护区内写入被拒、配置路径错误被拒、缺规则被拒、拒绝覆盖输入、成功导出后重读与 NBT 校验仍成立 |
+
+审查同时确认成立的部分：操作层只提案不写；拒绝后调用方场景保持干净；净变化的 `before` 严格取自基线且零净变化不豁免权限；NBT 白名单无法覆盖 `Position`/`Size`/`MinecraftDataVersion`（region_id 含 `.` 时是 fail-closed 的假失败）；保护优先于可编辑区。

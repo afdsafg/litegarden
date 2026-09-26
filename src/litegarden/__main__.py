@@ -48,15 +48,32 @@ def _assets_dir(args: argparse.Namespace) -> Path:
 
 
 def _load_config(path) -> dict:
+    """Load the read-only project config; a named-but-missing file is an error.
+
+    Silently treating a mistyped ``--config`` as "no rules" would switch off
+    protection, the editable zone and the version gate at once, which is
+    exactly the "unknown condition must refuse" rule this project promises.
+    """
     if not path:
         return {}
     p = Path(path)
     if not p.exists():
-        return {}
+        raise ValueError(f"--config {path} does not exist")
     raw = json.loads(p.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError(f"{p}: config must be a JSON object")
     return raw
+
+
+def _require_block_rules(assets_dir: Path) -> None:
+    """Refuse the CLI path when the verified block rules are unavailable."""
+    rules_path = Path(assets_dir) / "block_rules.json"
+    if not rules_path.exists():
+        raise ValueError(
+            f"{rules_path} not found: the block whitelist and the editable data "
+            "version gate would both be switched off, so nothing can be verified. "
+            "Point --assets at the project's assets directory."
+        )
 
 
 def _analysis(scene, config: dict):
@@ -139,7 +156,13 @@ def _cmd_pack(args: argparse.Namespace) -> int:
 
 
 def _compile(args, scene, config):
-    """Shared compile step for `compile` and `export` (one implementation)."""
+    """Shared compile step for `compile` and `export` (one implementation).
+
+    Both commands refuse to run without the verified block rules: a missing
+    ``block_rules.json`` would switch off the block whitelist and the editable
+    data version gate at the same time, so nothing could be verified.
+    """
+    _require_block_rules(_assets_dir(args))
     plan = parse_plan(Path(args.plan).read_text(encoding="utf-8"))
     analysis = _analysis(scene, config)
     guard, hosts = _guard_for(scene, args, config)
@@ -169,7 +192,6 @@ def _report_payload(args, result, extra=None) -> dict:
         "issues": result.issues,
         "write_policy": result.guard.policy.describe(),
         "write_audit": {
-            "events": len(result.events),
             "guard": result.guard.stats.to_dict(),
         },
     }
@@ -180,15 +202,23 @@ def _report_payload(args, result, extra=None) -> dict:
 
 def _cmd_compile(args: argparse.Namespace) -> int:
     scene = load_scene(args.input)
-    config = _load_config(getattr(args, "config", None))
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     try:
+        config = _load_config(getattr(args, "config", None))
         result = _compile(args, scene, config)
     except WriteRejected as e:
         err = {"error": "write refused", "rejected": e.to_dict()}
         (out / "error.json").write_text(json.dumps(err, indent=2), encoding="utf-8")
         print(json.dumps(err, indent=2), file=sys.stderr)
+        return 1
+    except ValueError as e:
+        # an early refusal (missing config, missing verified rules, bad plan)
+        # still leaves a structured error behind
+        err = {"error": str(e), "code": "POLICY_INPUT_INVALID"}
+        (out / "error.json").write_text(json.dumps(err, indent=2), encoding="utf-8")
+        print(json.dumps(err, indent=2), file=sys.stderr)
+        return 1
         return 1
     except CompileError as e:
         err = {"error": str(e), "op_id": e.op_id, "code": e.code, "issues": e.issues}
@@ -247,37 +277,50 @@ def _cmd_export(args: argparse.Namespace) -> int:
         print(json.dumps(err, indent=2), file=sys.stderr)
         return 1
 
+    # Every artefact that can fail is produced *before* the candidate is
+    # promoted, so a failed export never leaves a fresh full.litematic behind.
+    changes_schem = build_changes_schematic(scene, patch) if len(patch) else None
+    # The host-block check must compare against the untouched import, so the
+    # pristine scene is loaded before the working copy is patched (patching
+    # mutates the in-memory region in place).
+    pristine = load_scene(str(args.input))
+    final_path = Path(out) / "full.litematic"
+    tmp_path = Path(out) / "full.litematic.tmp"
+    input_abs = os.path.abspath(str(args.input))
+    if os.path.abspath(str(final_path)) == input_abs:
+        err = {
+            "error": "refusing to overwrite the input file",
+            "detail": f"{final_path} is the input; choose a different --out directory",
+        }
+        (Path(out) / "error.json").write_text(json.dumps(err, indent=2), encoding="utf-8")
+        print(json.dumps(err, indent=2), file=sys.stderr)
+        return 2
     apply_patchset(scene, patch)
-
-    # Write to a temp path and only promote it after the re-read checks pass,
-    # so a failed export never leaves a fresh full.litematic behind.
-    final_path = out / "full.litematic"
-    tmp_path = out / "full.litematic.tmp"
-    save_scene(scene, str(tmp_path))
-    reloaded = load_scene(str(tmp_path))
-    stats = compare_to_expected(str(tmp_path), scene, patch)
     try:
-        ensure_export_preserved(scene, reloaded)
-    except (NbtPreservationError, BlockEntityHostChanged) as e:
-        err = {"error": "NBT preservation check failed", "detail": str(e)}
+        save_scene(scene, str(tmp_path))
+        reloaded = load_scene(str(tmp_path))
+        stats = compare_to_expected(str(tmp_path), scene, patch)
+        ensure_export_preserved(pristine, reloaded)
+    except (NbtPreservationError, BlockEntityHostChanged, AssertionError,
+            UnsupportedFormatError, ValueError) as e:
+        err = {"error": "re-read verification failed", "detail": str(e)}
         if isinstance(e, NbtPreservationError):
             err["differences"] = [d.__dict__ for d in e.differences]
-        else:
+        if isinstance(e, BlockEntityHostChanged):
             err.update(e.to_dict())
-        (out / "error.json").write_text(json.dumps(err, indent=2), encoding="utf-8")
-        os.remove(tmp_path)
+        if tmp_path.exists():
+            os.remove(tmp_path)
+        (Path(out) / "error.json").write_text(json.dumps(err, indent=2), encoding="utf-8")
         print(json.dumps(err, indent=2), file=sys.stderr)
         return 1
     os.replace(tmp_path, final_path)
-
-    if len(patch):
-        changes = build_changes_schematic(scene, patch)
-        changes.save(str(out / "changes.litematic"))
-
+    if changes_schem is not None and os.path.abspath(
+        str(Path(out) / "changes.litematic")
+    ) != input_abs:
+        changes_schem.save(str(Path(out) / "changes.litematic"))
     changes_json = {
         "schema_version": "0.2",
         "base_scene": str(args.input),
-        "base_scene_hash": None,
         "changes": [c.__dict__ for c in patch],
     }
     (out / "changes.json").write_text(json.dumps(changes_json, indent=2), encoding="utf-8")

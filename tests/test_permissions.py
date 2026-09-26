@@ -91,9 +91,42 @@ def _path_plan(from_anchor: str, to: str, width: int = 1):
 def _flat_with_anchors(tmp_path, size=(24, 8, 24)):
     src, scene = _scene(tmp_path, size=size)
     assets = _write_assets(tmp_path)
+    add_block_rules(assets)
     a = analyze(scene.snapshot)
     build_planning_index(a)
-    a.anchors = {"A": (0, 5), "B": (size[0] - 1, 5)}
+    a.anchors = {"A": (2, 5), "B": (size[0] - 3, 5)}
+    return src, scene, assets, a
+_SYNTHETIC_RULES = {
+    "version": "0.2",
+    "editable_data_versions": [2975, 3953, 4671],
+    "in_game_validated": False,
+    "allowed_new_blocks": [
+        "minecraft:stone_bricks", "minecraft:cobblestone", "minecraft:gravel",
+        "minecraft:oak_planks", "minecraft:spruce_planks", "minecraft:oak_log",
+        "minecraft:oak_leaves", "minecraft:lantern", "minecraft:oak_fence",
+        "minecraft:stone_brick_slab",
+    ],
+}
+
+
+def add_block_rules(assets) -> None:
+    """Give a synthetic assets directory a verified block-rules file.
+
+    The CLI refuses to run without one: a missing file would silently switch
+    off both the block whitelist and the editable data version gate.
+    """
+    (Path(assets) / "block_rules.json").write_text(
+        json.dumps(_SYNTHETIC_RULES), encoding="utf-8"
+    )
+
+
+def _flat_with_anchors(tmp_path, size=(24, 8, 24)):
+    src, scene = _scene(tmp_path, size=size)
+    assets = _write_assets(tmp_path)
+    add_block_rules(assets)
+    a = analyze(scene.snapshot)
+    build_planning_index(a)
+    a.anchors = {"A": (2, 5), "B": (size[0] - 3, 5)}
     return src, scene, assets, a
 
 

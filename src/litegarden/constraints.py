@@ -222,10 +222,16 @@ def parse_box(raw, what: str) -> Box3:
         if not isinstance(bb, (list, tuple)) or len(bb) != 4:
             raise ValueError(f"{what}.bbox must be [x0, z0, x1, z1]")
         bb = [_require_int(v, f"{what}.bbox[{i}]") for i, v in enumerate(bb)]
-        lo = (bb[0], _require_int(raw.get("min_y", 0), f"{what}.min_y"), bb[1])
+        for key in ("min_y", "max_y_exclusive"):
+            if key not in raw:
+                raise ValueError(
+                    f"{what}: a 2D 'bbox' must also declare {key}; silently dropping "
+                    "the Y range is exactly the failure this gate exists to prevent"
+                )
+        lo = (bb[0], _require_int(raw["min_y"], f"{what}.min_y"), bb[1])
         hi = (
             bb[2] + 1,
-            _require_int(raw.get("max_y_exclusive", 1 << 30), f"{what}.max_y_exclusive"),
+            _require_int(raw["max_y_exclusive"], f"{what}.max_y_exclusive"),
             bb[3] + 1,
         )
     else:
@@ -366,8 +372,14 @@ def build_policy(
 
     digest_payload = {
         "data_version": data_version,
-        "editable_versions": sorted(editable_versions) if editable_versions else None,
-        "allowed_new_blocks": sorted(allowed_new) if allowed_new else None,
+        # ``None`` (no rule declared) and an empty set (a rule that forbids
+        # everything) are different policies and must not share a hash.
+        "editable_versions": (
+            None if editable_versions is None else sorted(editable_versions)
+        ),
+        "allowed_new_blocks": (
+            None if allowed_new is None else sorted(allowed_new)
+        ),
         "removable_blocks": sorted(REMOVABLE_BLOCKS),
         "protected": protected.to_list(),
         "editable": editable.to_list() if editable else None,

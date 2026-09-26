@@ -280,6 +280,7 @@ class WorkingWorld:
         self.events.append(event)
         self._writes[pos] = after
         self._writers.setdefault(pos, []).append(event)
+        self._staged_hash = None  # the cached semantic hash is now stale
         return event
 
     # -- merge ------------------------------------------------------------

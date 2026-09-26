@@ -38,7 +38,13 @@ from litegarden.schema import parse_plan
 from litegarden.terrain import analyze, build_planning_index
 
 from .test_operations import _flat_scene, _write_assets
-from .test_permissions import _permissive_guard, _scene, _world
+
+from .test_permissions import (
+    _permissive_guard,
+    _scene,
+    _world,
+    add_block_rules,
+)
 
 GRASS = "minecraft:grass_block"
 STONE = "minecraft:stone"
@@ -258,6 +264,7 @@ def test_c06_cli_refuses_an_unlisted_data_version(tmp_path):
 def _flat_with(tmp_path, size=(24, 8, 24)):
     src, scene = _scene(tmp_path, size=size)
     assets = _write_assets(tmp_path)
+    add_block_rules(assets)
     a = analyze(scene.snapshot)
     build_planning_index(a)
     a.anchors = {"A": (2, 5), "B": (size[0] - 3, 5)}
