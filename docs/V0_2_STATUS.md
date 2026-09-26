@@ -119,3 +119,26 @@ python -m litegarden export terrain.litematic --plan examples/cases/flat_plan.js
 | 缺少 `export` 端到端门禁的回归测试 | 新增 `tests/test_export_gates.py`：保护区内写入被拒、配置路径错误被拒、缺规则被拒、拒绝覆盖输入、成功导出后重读与 NBT 校验仍成立 |
 
 审查同时确认成立的部分：操作层只提案不写；拒绝后调用方场景保持干净；净变化的 `before` 严格取自基线且零净变化不豁免权限；NBT 白名单无法覆盖 `Position`/`Size`/`MinecraftDataVersion`（region_id 含 `.` 时是 fail-closed 的假失败）；保护优先于可编辑区。
+
+## P2-P5 增量状态（本轮实现）
+
+### 已实现并通过可执行验证
+- **P2 前端** `web/`：viewer 适配层（deepslate + 锁定的上游 viewer-lite.js）、选择交互、diff 叠加、评审桥、`review-view.html`；7 个 JS 全部通过 `node --check`；真实服务响应已用前端自身模块在 node 下交叉校验（`validateRenderScene`/diff/panels 全部 ok，0 warnings）。
+- **P2/P3 服务层** `src/litegarden/server/app.py`（2010 行，**仅标准库** `http.server`）：`GET /api/session`、`GET /api/projects/<p>`、revision/candidate render-scene、`POST /selections/validate`、`POST /tasks`、`GET /tasks/<t>`、`POST /tasks/<t>/attempts`、candidate diff、`POST .../accept`（显式 CAS，需 `expected_head`）、`undo`/`redo`、静态 `/`+`/web/*`+`/work/*`。安全：仅绑定 loopback、peer/Host 校验、非本机 Origin→403、写操作需 `X-Litegarden-Token`（`compare_digest`）、静态路径 `is_relative_to` 防穿越。
+- **`serve` CLI**：`python -m litegarden serve --project <dir> --port 8765`，启动打印含 token 的 URL。
+- **P5 Agent 适配层** `src/litegarden/agent_adapter.py`（3069 行，仅标准库）：runner/provider 双模式共用契约；无配置→`WAITING_AGENT` 且**不产出任何 plan**；有界运行（超时/输出上限/环境白名单/固定 cwd/非交互 stdin）；越权防护三层（参考白名单、逐操作写盒、自述意图），命中即**整批拒绝、绝不裁剪**；`review_evidence` 只读、写请求不可伪装；全程留痕（`agent_request.json`/`agent_response.json`/`agent_trace.jsonl`）。CLI：`agent-run`、`agent-review`。
+- **测试**：292 passed（新增 `tests/test_server.py` 28、`tests/test_agent_adapter.py` 31）。真实项目端到端竖切通过：315 改动（cut 35/fill 134/replace 146）、409 STALE_HEAD→接受 r001→undo/redo 字节级一致、既有文件未变。
+- **回归**：三案例重新导出完全复现（replace 146/151/157），源文件 sha256 `E3BECD1E...2EE767` 未变。
+
+### 未实现 / 未验证（不得视为已完成）
+- **P4 Playwright 浏览器捕获：未实现**。离线环境无法安装 playwright。`GET /api/session` 如实发布 `capabilities.review_jobs=false`。
+- **真实浏览器渲染未验证**：`web/**` 从未在浏览器里渲染过（本机无可用 WebGL 渲染验证路径）；只有 JS 语法检查 + 前端自身校验模块在 node 下的载荷校验。服务层因此额外提供 `resource_hash`（对 `web/vendor/litematica-viewer` 全量哈希）以免前端静默降级。
+- **真实 Agent 从未运行**：全部 P5 验证使用假 runner / 注入式 provider。任务书 15.6 的"至少一次实际 Agent 完整运行"仍待人工在有 Agent 的机器上补。
+- **只读查询工具只有声明、未接线**：`DEFAULT_READONLY_TOOLS` 是契约与校验，handler 需由调用方接到 `render_scene`/`terrain`/`traversal`；未接线时查询如实返回 `AGENT_TOOL_FAILED` 且 `evidence_ok=false`。
+- **§17.2 部分路由未实现**：`/exports`、`/review`、`/cancel`、`/reject`、单 attempt 的 inspect 端点；`GET /api/session` 把这些发布为 `false`，不做静默降级。`server/jobs.py` 有意省略（路由同步，进度即真实状态机，不编造百分比）。
+- **同一任务多次尝试未开放**：`redesign._ALLOWED` 决定成功一次后任务进 `READY_FOR_USER`，再提交 attempt 会被 409 `INVALID_TASK_STATE` 拒绝（失败后可重试；`a001...` 永不覆盖）。
+- **未做压力验证**：同项目双服务（30s 后 503 `PROJECT_LOCK_UNAVAILABLE`）、>8MiB 体 413、POSIX 路径穿越（仅 Windows 验证过）。
+- `changes.litematic` 仍是非空气投影（既有 P1 限制，未变）。
+
+### 仍未执行
+- **P6 游戏内人工验收**：`docs/ACCEPTANCE.md` 清单与真实数字（flat 315 / slope 368 / lakeside 344）齐备，但游戏内实拍验收尚未进行。

@@ -4,12 +4,16 @@ Contract (spec section 10):
     python -m litegarden inspect terrain.litematic --out work/demo
     python -m litegarden compile terrain.litematic --plan plan.json --dry-run --out work/demo
     python -m litegarden export terrain.litematic --plan plan.json --out output/demo
+    python -m litegarden serve --project projects/demo --port 8765
 
 export re-compiles and re-validates; it never trusts a previous dry-run state.
 A failed validation produces no full.litematic.
 
 Both commands go through the same WriteGuard and net-patch merge as the library
 API: there is no separate compile path for the CLI.
+
+``serve`` runs the loopback-only workbench service (spec 17.2/19.2) on top of
+the same modules; it does not re-implement compile, validation or acceptance.
 """
 from __future__ import annotations
 
@@ -353,6 +357,46 @@ def _cmd_export(args: argparse.Namespace) -> int:
     ))
     return 0
 
+def _cmd_serve(args: argparse.Namespace) -> int:
+    """Run the loopback-only workbench service (spec 17.2)."""
+    from .server.app import ServerConfig, serve_forever
+
+    project_dir = Path(args.project)
+    if not project_dir.is_dir():
+        print(f"error: --project {project_dir} is not a directory", file=sys.stderr)
+        return 2
+    if not (project_dir / "HEAD.json").is_file():
+        print(
+            f"error: {project_dir} has no HEAD.json; create the project first "
+            "(every write goes through the project store)",
+            file=sys.stderr,
+        )
+        return 2
+    assets = _assets_dir(args)
+    try:
+        # Same gate as compile/export: without the verified block rules both the
+        # block whitelist and the editable-version gate would be switched off.
+        _require_block_rules(assets)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    config = ServerConfig(
+        project_dir=project_dir,
+        web_dir=Path(args.web_dir),
+        work_dir=Path(args.work_dir) if args.work_dir else None,
+        assets_dir=assets,
+        host=args.host,
+        port=args.port,
+        token="" if args.no_token else args.token,
+        allow_remote=bool(args.allow_remote),
+    )
+    try:
+        serve_forever(config)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    return 0
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="litegarden", description=__doc__)
@@ -390,8 +434,116 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--plan", required=True, help="plan.json")
     sp.set_defaults(func=_cmd_export)
 
+    sp = sub.add_parser("serve", help="run the local workbench service (loopback only)")
+    sp.add_argument("--project", required=True,
+                    help="project directory created by `project init`")
+    sp.add_argument("--host", default="127.0.0.1",
+                    help="bind address; a non-loopback host needs --allow-remote")
+    sp.add_argument("--port", type=int, default=8765,
+                    help="TCP port (0 = an ephemeral port)")
+    sp.add_argument("--web-dir", default="web", help="frontend directory served at /web/*")
+    sp.add_argument("--work-dir", default=None,
+                    help="directory served at /work/* (default: the repo's work/)")
+    sp.add_argument("--assets", default="assets", help="assets directory")
+    sp.add_argument("--token", default=None,
+                    help="fixed run token (default: a fresh random token per run)")
+    sp.add_argument("--no-token", action="store_true",
+                    help="disable the write-request token (the loopback Origin check stays on)")
+    sp.add_argument("--allow-remote", action="store_true",
+                    help="allow a non-loopback bind (not recommended)")
+    sp.set_defaults(func=_cmd_serve)
+    sp = sub.add_parser("agent-run", help="ask the configured Agent for a plan for a frozen task")
+    sp.add_argument("--project", required=True, help="project directory (P2 project store)")
+    sp.add_argument("--task", required=True, help="frozen task id, e.g. task_001")
+    sp.add_argument("--agent", default=None,
+                    help="agent.json; default: $LITEGARDEN_AGENT_CONFIG (absent = WAITING_AGENT)")
+    sp.add_argument("--config", default=None, help="case config supplying extra anchors")
+    sp.add_argument("--assets", default="assets", help="assets directory")
+    sp.add_argument("--out", default=None, help="write the full run outcome JSON here")
+    sp.set_defaults(func=_cmd_agent_run)
+
+    sp = sub.add_parser("agent-review", help="ask the configured Agent to review hard-error evidence")
+    sp.add_argument("--project", required=True, help="project directory (P2 project store)")
+    sp.add_argument("--task", required=True, help="frozen task id, e.g. task_001")
+    sp.add_argument("--attempt", default="a001", help="attempt id inside the task")
+    sp.add_argument("--evidence", required=True,
+                    help="evidence bundle JSON (A/B report + manifest)")
+    sp.add_argument("--agent", default=None,
+                    help="agent.json; default: $LITEGARDEN_AGENT_CONFIG (absent = WAITING_AGENT)")
+    sp.add_argument("--config", default=None, help="case config supplying extra anchors")
+    sp.add_argument("--assets", default="assets", help="assets directory")
+    sp.add_argument("--out", default=None, help="write the full review outcome JSON here")
+    sp.set_defaults(func=_cmd_agent_review)
+
     return p
 
+
+def _task_analysis(project_dir: Path, request, args) -> object:
+    """Rebuild the read-only reference inventory the Agent is allowed to use."""
+    from .io import load_scene
+    from .terrain import analyze, build_planning_index
+
+    scene_path = project_dir / "revisions" / request.base_revision_id / "scene.litematic"
+    if not scene_path.exists():
+        return None
+    scene = load_scene(str(scene_path))
+    analysis = analyze(scene.snapshot)
+    build_planning_index(analysis)
+    for name, pos in ((_load_config(getattr(args, "config", None)) or {}).get("anchors") or {}).items():
+        analysis.anchors[name] = tuple(pos)
+    return analysis
+
+
+def _selection_report(store, task_id: str):
+    path = store.task_dir(task_id) / "context" / "context.json"
+    if not path.exists():
+        return None
+    return (json.loads(path.read_text(encoding="utf-8")) or {}).get("selection_report")
+
+
+def _cmd_agent_run(args: argparse.Namespace) -> int:
+    from .agent_adapter import AgentAdapter, run_agent_plan
+    from .redesign import TaskStore
+
+    store = TaskStore(Path(args.project))
+    request = store.read_request(args.task)
+    adapter = AgentAdapter.from_config(Path(args.agent) if args.agent else None)
+    outcome = run_agent_plan(
+        adapter, store, args.task,
+        analysis=_task_analysis(Path(args.project), request, args),
+        assets_dir=Path(args.assets),
+        selection_report=_selection_report(store, args.task),
+    )
+    payload = dict(outcome.to_dict(), adapter=adapter.describe())
+    if args.out:
+        Path(args.out).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(json.dumps({k: payload.get(k) for k in
+                      ("status", "attempt_id", "has_plan", "task_state", "errors")},
+                     indent=2, ensure_ascii=False))
+    if outcome.ok:
+        return 0
+    return 3 if outcome.status == "WAITING_AGENT" else 1
+
+
+def _cmd_agent_review(args: argparse.Namespace) -> int:
+    from .agent_adapter import AgentAdapter, run_agent_review
+    from .redesign import TaskStore
+
+    store = TaskStore(Path(args.project))
+    request = store.read_request(args.task)
+    evidence = json.loads(Path(args.evidence).read_text(encoding="utf-8"))
+    adapter = AgentAdapter.from_config(Path(args.agent) if args.agent else None)
+    outcome = run_agent_review(
+        adapter, store, args.task, args.attempt, evidence=evidence,
+        analysis=_task_analysis(Path(args.project), request, args),
+    )
+    payload = dict(outcome.to_dict(), adapter=adapter.describe())
+    if args.out:
+        Path(args.out).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(json.dumps({k: payload.get(k) for k in
+                      ("status", "verdict", "review_executed", "evidence_ok", "errors")},
+                     indent=2, ensure_ascii=False))
+    return 0 if outcome.ok else (3 if outcome.status == "WAITING_AGENT" else 1)
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
